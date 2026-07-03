@@ -25,7 +25,6 @@
         .copy-btn { background: #1a140f; border: 1px solid #3d3120; color: #8c7038; padding: 4px 10px; font-size: 0.7rem; cursor: pointer; font-family: inherit; margin-left: 8px; font-weight: bold; letter-spacing: 1px; }
         .copy-btn:hover { background: #3d3120; color: #fff; }
 
-        /* AVISO DE CONEXÃO MULTIPLAYER */
         #mp-status-msg { color: #5cb85c; font-size: 0.85rem; margin-top: 10px; font-weight: bold; letter-spacing: 1px; min-height: 20px; text-shadow: 0 0 8px rgba(92,184,92,0.4); }
 
         .cards-container { display: flex; gap: 20px; }
@@ -129,7 +128,7 @@
             <div class="card" onclick="selectClass('Ladino')">
                 <h2>LADINO</h2>
                 <div class="card-art"><img src="sprite/ladino.png" alt="Ladino"></div>
-                <p>Q: Dissipa-se nas sombras (Furtivo). Danos por trás duplicados.<br><br>E: Gume Sangrento (5s de Sangramento).</p>
+                <p>Q: Dissipa-se nas sombras (Furtivo). Danos por trás duplicados.<br><br>E: Gume Sangrento (5s de Sangramento Dinâmico).</p>
             </div>
         </div>
     </div>
@@ -192,7 +191,6 @@
             document.getElementById('my-peer-id').innerText = id; 
         });
 
-        // Evento disparado no HOST quando o CLIENTE se conecta
         peer.on('connection', connection => { 
             conn = connection; 
             isHost = true; 
@@ -210,7 +208,6 @@
                 conn = peer.connect(targetId); 
                 isHost = false; 
                 
-                // Evento disparado no CLIENTE quando ele consegue abrir a conexão com o HOST
                 conn.on('open', () => {
                     setupChat(); 
                     document.getElementById('mp-status-msg').innerText = "CONEXÃO ESTABELECIDA! Almas vinculadas.";
@@ -221,14 +218,22 @@
 
         function setupChat() { 
             conn.on('data', data => { 
-                if(data.type === 'playerUpdate') remotePlayers[data.id] = data.state; 
+                if(data.type === 'playerUpdate') {
+                    remotePlayers[data.id] = data.state;
+                }
                 if(data.type === 'projectiles') projectiles = data.list; 
                 if(data.type === 'meleeSlash') triggerRemoteSlash(data); 
                 if(data.type === 'explosion') triggerVisualExplosion(data); 
+                if(data.type === 'takeDamage' && data.targetId === player.id) {
+                    if(!player.isRolling) player.hp -= data.damage;
+                }
+                if(data.type === 'applyBleed' && data.targetId === player.id) {
+                    player.bleedTimer = data.duration;
+                    player.bleedDamage = data.baseDamage;
+                }
             }); 
         }
 
-        // FUNÇÃO DE COPIAR CORRIGIDA
         function copyIdToClipboard() {
             let idText = document.getElementById('my-peer-id').innerText;
             if (idText && idText !== "Carregando..." && idText !== "...") {
@@ -267,7 +272,7 @@
             x: WORLD_SIZE / 2, y: WORLD_SIZE / 2, angle: 0,
             baseSpeed: 4, speed: 4, size: 24, hp: 100, maxHp: 100, xp: 0, nextLevelXp: 150, level: 1, class: '',
             isInvisible: false, invisibleTimer: 0, isRolling: false, rollTimer: 0,
-            attackCooldown: 0,
+            attackCooldown: 0, bleedTimer: 0, bleedDamage: 0,
             stats: { forca: 0, agi: 0, int: 0 }, points: 0,
             cooldowns: { Q: 0, E: 0, Space: 0 }
         };
@@ -377,6 +382,25 @@
                 let damage = (player.class === 'Guerreiro' ? 25 : 16) + (player.stats.forca * 3);
 
                 visualSlashes.push({ x: player.x, y: player.y, angle: angle, duration: 10, isBleed: false });
+                if(conn && conn.open) conn.send({type: 'meleeSlash', x: player.x, y: player.y, angle: angle});
+
+                // FOGO AMIGO: Testa contra outros players conectados
+                Object.keys(remotePlayers).forEach(pId => {
+                    let rm = remotePlayers[pId];
+                    if(rm.hp > 0 && !rm.isInvisible && Math.hypot(rm.x - player.x, rm.y - player.y) <= range + 24) {
+                        let angleToM = Math.atan2(rm.y - player.y, rm.x - player.x);
+                        let diff = Math.atan2(Math.sin(angleToM - angle), Math.cos(angleToM - angle));
+                        if(Math.abs(diff) < 1.1) {
+                            let finalDmg = damage;
+                            if(player.class === 'Ladino') {
+                                let dotProduct = Math.cos(rm.angle) * Math.cos(player.angle) + Math.sin(rm.angle) * Math.sin(player.angle);
+                                if (dotProduct > 0.3) finalDmg *= 2; // Backstab
+                                if (player.isInvisible) player.isInvisible = false;
+                            }
+                            conn.send({type: 'takeDamage', targetId: pId, damage: finalDmg});
+                        }
+                    }
+                });
 
                 if (isHost) {
                     monsters.forEach(m => {
@@ -445,6 +469,16 @@
             let tickDmg = 6 + (player.stats.forca * 0.8);
 
             visualSlashes.push({ x: player.x, y: player.y, angle: angle, duration: 12, isBleed: true });
+            if(conn && conn.open) conn.send({type: 'meleeSlash', x: player.x, y: player.y, angle: angle});
+
+            // FOGO AMIGO: Sangramento em players inimigos
+            Object.keys(remotePlayers).forEach(pId => {
+                let rm = remotePlayers[pId];
+                if(rm.hp > 0 && Math.hypot(rm.x - player.x, rm.y - player.y) <= range + 24) {
+                    conn.send({type: 'takeDamage', targetId: pId, damage: instantDmg});
+                    conn.send({type: 'applyBleed', targetId: pId, duration: 300, baseDamage: tickDmg});
+                }
+            });
 
             if (isHost) {
                 monsters.forEach(m => {
@@ -479,6 +513,7 @@
 
         function handlePlayerDeath() {
             isDead = true; isQPressed = false; chargeTimer = 0;
+            player.bleedTimer = 0;
             document.getElementById('charge-bar-container').style.display = 'none';
             let screen = document.getElementById('death-screen');
             screen.style.display = 'flex';
@@ -493,6 +528,16 @@
         function explodeFireball(p) {
             let radius = 80; 
             visualExplosions.push({ x: p.x, y: p.y, radius: radius, alpha: 1.0 });
+            if(conn && conn.open) conn.send({type: 'explosion', x: p.x, y: p.y, radius: radius});
+
+            // FOGO AMIGO: Explosão atinge outros players
+            Object.keys(remotePlayers).forEach(pId => {
+                let rm = remotePlayers[pId];
+                if(rm.hp > 0 && Math.hypot(rm.x - p.x, rm.y - p.y) <= radius) {
+                    conn.send({type: 'takeDamage', targetId: pId, damage: p.damage});
+                }
+            });
+
             if (isHost) {
                 monsters.forEach(m => {
                     if (Math.hypot(m.x - p.x, m.y - p.y) <= radius) {
@@ -505,6 +550,17 @@
         function update() {
             if(isDead) return;
             if(player.hp <= 0) { handlePlayerDeath(); return; }
+
+            // Lógica de Sangramento do próprio jogador (Com escalonamento por vida perdida)
+            if (player.bleedTimer > 0) {
+                player.bleedTimer--;
+                if (player.bleedTimer % 60 === 0) {
+                    let vidaPerdidaPct = 1 - (player.hp / player.maxHp); 
+                    // Garante um multiplicador de até 3x mais dano com pouca vida
+                    let multiplicadorDesespero = 1 + (vidaPerdidaPct * 2); 
+                    player.hp -= player.bleedDamage * multiplicadorDesespero;
+                }
+            }
 
             gameTime = (gameTime + 1) % TOTAL_CYCLE;
             let isNight = gameTime >= DAY_DURATION;
@@ -552,6 +608,17 @@
                 let distTraveled = Math.hypot(p.x - p.startX, p.y - p.startY);
                 let hitSomething = false;
 
+                // FOGO AMIGO PROJÉTEIS: Detecção de colisão no outro player
+                Object.keys(remotePlayers).forEach(pId => {
+                    let rm = remotePlayers[pId];
+                    if(p.ownerId !== pId && rm.hp > 0 && Math.hypot(rm.x - p.x, rm.y - p.y) < 24 + p.size) {
+                        hitSomething = true;
+                        if(!p.isRedExplosive && conn && conn.open) {
+                            conn.send({type: 'takeDamage', targetId: pId, damage: p.damage});
+                        }
+                    }
+                });
+
                 if (isHost) {
                     monsters.forEach(m => {
                         if(Math.hypot(m.x - p.x, m.y - p.y) < m.size + p.size) {
@@ -570,7 +637,11 @@
                 monsters.forEach(m => {
                     if (m.bleedTimer > 0) {
                         m.bleedTimer--;
-                        if (m.bleedTimer % 60 === 0) m.hp -= m.bleedDamage;
+                        if (m.bleedTimer % 60 === 0) {
+                            let mLifePct = 1 - (m.hp / m.maxHp);
+                            let monsterBleedMult = 1 + (mLifePct * 2); // Monstros também sofrem execução por sangramento
+                            m.hp -= m.bleedDamage * monsterBleedMult;
+                        }
                     }
 
                     let targets = [player, ...Object.values(remotePlayers)].filter(t => !t.isInvisible && t.hp > 0);
@@ -581,7 +652,13 @@
 
                     if(minDist < 600) { 
                         m.x += Math.cos(m.angle) * m.speed; m.y += Math.sin(m.angle) * m.speed; 
-                        if(minDist < m.size + closest.size) closest.hp -= m.damage; 
+                        if(minDist < m.size + closest.size) {
+                            if(closest.id === player.id) {
+                                if(!player.isRolling) player.hp -= m.damage;
+                            } else if(conn && conn.open) {
+                                conn.send({type: 'takeDamage', targetId: closest.id, damage: m.damage});
+                            }
+                        }
                     }
                     m.animTimer++; if(m.animTimer > 12) { m.animFrame = (m.animFrame + 1) % 4; m.animTimer = 0; }
                 });
@@ -599,6 +676,7 @@
                 conn.send({ type: 'playerUpdate', id: player.id, state: { x: player.x, y: player.y, angle: player.angle, class: player.class, hp: player.hp, isInvisible: player.isInvisible } });
             }
 
+            // Atualiza dados na tela
             document.getElementById('hud-level').innerText = `VIGOR NÍVEL: ${player.level}`;
             document.getElementById('hp-fill').style.width = `${Math.max(0, (player.hp / player.maxHp) * 100)}%`;
             document.getElementById('hp-text').innerText = `${Math.floor(Math.max(0, player.hp))} / ${player.maxHp}`;
@@ -611,7 +689,6 @@
             let camX = canvas.width / 2 - player.x; let camY = canvas.height / 2 - player.y;
 
             let isNight = gameTime >= DAY_DURATION;
-
             ctx.fillStyle = isNight ? '#030305' : '#141416'; 
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -683,6 +760,10 @@
                     ctx.drawImage(img, -20, -20, 40, 40); ctx.filter = 'none';
                 }
                 ctx.restore();
+
+                // Barra de vida do outro jogador
+                ctx.fillStyle = '#0d0a0a'; ctx.fillRect(np.x + camX - 20, np.y + camY - 28, 40, 3);
+                ctx.fillStyle = '#9c1c1c'; ctx.fillRect(np.x + camX - 20, np.y + camY - 28, (np.hp / 100) * 40, 3);
             });
 
             if(!isDead) {
@@ -695,6 +776,12 @@
                     ctx.drawImage(pImg, -player.size, -player.size, player.size*2, player.size*2); ctx.filter = 'none';
                 }
                 ctx.restore();
+
+                // Efeito visual piscando em vermelho se o próprio jogador estiver sangrando
+                if(player.bleedTimer > 0 && Math.floor(player.bleedTimer / 6) % 2 === 0) {
+                    ctx.fillStyle = 'rgba(150, 0, 0, 0.15)';
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                }
             }
 
             if (isNight) {
