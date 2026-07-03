@@ -224,8 +224,12 @@
                 if(data.type === 'projectiles') projectiles = data.list; 
                 if(data.type === 'meleeSlash') triggerRemoteSlash(data); 
                 if(data.type === 'explosion') triggerVisualExplosion(data); 
-                if(data.type === 'takeDamage' && data.targetId === player.id) {
-                    if(!player.isRolling) player.hp -= data.damage;
+                
+                // RECEBE O PACOTE DE DANO DO OUTRO PLAYER E DESCONTA LOCALMENTE
+                if(data.type === 'inflictDamage' && data.targetId === player.id) {
+                    if(!player.isRolling && !isDead) {
+                        player.hp -= data.damage;
+                    }
                 }
                 if(data.type === 'applyBleed' && data.targetId === player.id) {
                     player.bleedTimer = data.duration;
@@ -384,7 +388,7 @@
                 visualSlashes.push({ x: player.x, y: player.y, angle: angle, duration: 10, isBleed: false });
                 if(conn && conn.open) conn.send({type: 'meleeSlash', x: player.x, y: player.y, angle: angle});
 
-                // FOGO AMIGO: Testa contra outros players conectados
+                // PVP FOGO AMIGO CORPORAL: Aplica dano direto ao alvo remoto
                 Object.keys(remotePlayers).forEach(pId => {
                     let rm = remotePlayers[pId];
                     if(rm.hp > 0 && !rm.isInvisible && Math.hypot(rm.x - player.x, rm.y - player.y) <= range + 24) {
@@ -394,10 +398,10 @@
                             let finalDmg = damage;
                             if(player.class === 'Ladino') {
                                 let dotProduct = Math.cos(rm.angle) * Math.cos(player.angle) + Math.sin(rm.angle) * Math.sin(player.angle);
-                                if (dotProduct > 0.3) finalDmg *= 2; // Backstab
+                                if (dotProduct > 0.3) finalDmg *= 2; // Backstab ativo
                                 if (player.isInvisible) player.isInvisible = false;
                             }
-                            conn.send({type: 'takeDamage', targetId: pId, damage: finalDmg});
+                            if(conn && conn.open) conn.send({type: 'inflictDamage', targetId: pId, damage: finalDmg});
                         }
                     }
                 });
@@ -471,12 +475,14 @@
             visualSlashes.push({ x: player.x, y: player.y, angle: angle, duration: 12, isBleed: true });
             if(conn && conn.open) conn.send({type: 'meleeSlash', x: player.x, y: player.y, angle: angle});
 
-            // FOGO AMIGO: Sangramento em players inimigos
+            // PVP FOGO AMIGO: Aplica sangramento no player inimigo
             Object.keys(remotePlayers).forEach(pId => {
                 let rm = remotePlayers[pId];
                 if(rm.hp > 0 && Math.hypot(rm.x - player.x, rm.y - player.y) <= range + 24) {
-                    conn.send({type: 'takeDamage', targetId: pId, damage: instantDmg});
-                    conn.send({type: 'applyBleed', targetId: pId, duration: 300, baseDamage: tickDmg});
+                    if(conn && conn.open) {
+                        conn.send({type: 'inflictDamage', targetId: pId, damage: instantDmg});
+                        conn.send({type: 'applyBleed', targetId: pId, duration: 300, baseDamage: tickDmg});
+                    }
                 }
             });
 
@@ -530,11 +536,11 @@
             visualExplosions.push({ x: p.x, y: p.y, radius: radius, alpha: 1.0 });
             if(conn && conn.open) conn.send({type: 'explosion', x: p.x, y: p.y, radius: radius});
 
-            // FOGO AMIGO: Explosão atinge outros players
+            // PVP FOGO AMIGO: Dano em área de explosão
             Object.keys(remotePlayers).forEach(pId => {
                 let rm = remotePlayers[pId];
                 if(rm.hp > 0 && Math.hypot(rm.x - p.x, rm.y - p.y) <= radius) {
-                    conn.send({type: 'takeDamage', targetId: pId, damage: p.damage});
+                    if(conn && conn.open) conn.send({type: 'inflictDamage', targetId: pId, damage: p.damage});
                 }
             });
 
@@ -551,13 +557,12 @@
             if(isDead) return;
             if(player.hp <= 0) { handlePlayerDeath(); return; }
 
-            // Lógica de Sangramento do próprio jogador (Com escalonamento por vida perdida)
+            // MECÂNICA DE SANGRAMENTO DESESPERADOR (EXECUÇÃO POR VIDA PERDIDA)
             if (player.bleedTimer > 0) {
                 player.bleedTimer--;
                 if (player.bleedTimer % 60 === 0) {
                     let vidaPerdidaPct = 1 - (player.hp / player.maxHp); 
-                    // Garante um multiplicador de até 3x mais dano com pouca vida
-                    let multiplicadorDesespero = 1 + (vidaPerdidaPct * 2); 
+                    let multiplicadorDesespero = 1 + (vidaPerdidaPct * 2.5); // Escala agressivamente até 3.5x com quase 0 HP
                     player.hp -= player.bleedDamage * multiplicadorDesespero;
                 }
             }
@@ -608,13 +613,13 @@
                 let distTraveled = Math.hypot(p.x - p.startX, p.y - p.startY);
                 let hitSomething = false;
 
-                // FOGO AMIGO PROJÉTEIS: Detecção de colisão no outro player
+                // PVP FOGO AMIGO PROJÉTEIS: Detecção de acerto e colisão direta
                 Object.keys(remotePlayers).forEach(pId => {
                     let rm = remotePlayers[pId];
                     if(p.ownerId !== pId && rm.hp > 0 && Math.hypot(rm.x - p.x, rm.y - p.y) < 24 + p.size) {
                         hitSomething = true;
                         if(!p.isRedExplosive && conn && conn.open) {
-                            conn.send({type: 'takeDamage', targetId: pId, damage: p.damage});
+                            conn.send({type: 'inflictDamage', targetId: pId, damage: p.damage});
                         }
                     }
                 });
@@ -639,7 +644,7 @@
                         m.bleedTimer--;
                         if (m.bleedTimer % 60 === 0) {
                             let mLifePct = 1 - (m.hp / m.maxHp);
-                            let monsterBleedMult = 1 + (mLifePct * 2); // Monstros também sofrem execução por sangramento
+                            let monsterBleedMult = 1 + (mLifePct * 2.5);
                             m.hp -= m.bleedDamage * monsterBleedMult;
                         }
                     }
@@ -656,7 +661,7 @@
                             if(closest.id === player.id) {
                                 if(!player.isRolling) player.hp -= m.damage;
                             } else if(conn && conn.open) {
-                                conn.send({type: 'takeDamage', targetId: closest.id, damage: m.damage});
+                                conn.send({type: 'inflictDamage', targetId: closest.id, damage: m.damage});
                             }
                         }
                     }
@@ -676,7 +681,6 @@
                 conn.send({ type: 'playerUpdate', id: player.id, state: { x: player.x, y: player.y, angle: player.angle, class: player.class, hp: player.hp, isInvisible: player.isInvisible } });
             }
 
-            // Atualiza dados na tela
             document.getElementById('hud-level').innerText = `VIGOR NÍVEL: ${player.level}`;
             document.getElementById('hp-fill').style.width = `${Math.max(0, (player.hp / player.maxHp) * 100)}%`;
             document.getElementById('hp-text').innerText = `${Math.floor(Math.max(0, player.hp))} / ${player.maxHp}`;
@@ -761,9 +765,9 @@
                 }
                 ctx.restore();
 
-                // Barra de vida do outro jogador
+                // Barra de vida renderizada dinamicamente para o outro player no seu canvas
                 ctx.fillStyle = '#0d0a0a'; ctx.fillRect(np.x + camX - 20, np.y + camY - 28, 40, 3);
-                ctx.fillStyle = '#9c1c1c'; ctx.fillRect(np.x + camX - 20, np.y + camY - 28, (np.hp / 100) * 40, 3);
+                ctx.fillStyle = '#9c1c1c'; ctx.fillRect(np.x + camX - 20, np.y + camY - 28, Math.max(0, (np.hp / 100)) * 40, 3);
             });
 
             if(!isDead) {
@@ -777,7 +781,6 @@
                 }
                 ctx.restore();
 
-                // Efeito visual piscando em vermelho se o próprio jogador estiver sangrando
                 if(player.bleedTimer > 0 && Math.floor(player.bleedTimer / 6) % 2 === 0) {
                     ctx.fillStyle = 'rgba(150, 0, 0, 0.15)';
                     ctx.fillRect(0, 0, canvas.width, canvas.height);
