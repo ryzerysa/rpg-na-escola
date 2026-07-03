@@ -113,7 +113,7 @@
             <div class="card" onclick="selectClass('Mago')">
                 <h2>MAGO</h2>
                 <div class="card-art"><img src="sprite/mago.png" alt="Mago"></div>
-                <p>Ataque Normal: Orbe azul ciano veloz.<br><br>Habilidade [1]: Ruína Vermelha (8s CD).</p>
+                <p>Ataque Normal: Orbe azul ciano veloz.<br><br>Habilidade [1]: Ruína Vermelha (8s CD).<br><br>Habilidade [2]: Estacas de Gelo (Acertar as 3 estacas paralisa por 2.5s).</p>
             </div>
             <div class="card" onclick="selectClass('Ranged')">
                 <h2>RANGED</h2>
@@ -176,7 +176,7 @@
             <div id="charge-bar-container"><div id="charge-bar-fill"></div></div>
             <div id="hud">
                 <div class="skill-slot" id="slot-1"><span class="skill-key">1</span><span class="skill-name" id="txt-1">-</span><div class="cooldown-overlay" id="cd-1"></div></div>
-                <div class="skill-slot" id="slot-2" style="display: none;"><span class="skill-key">2</span><span class="skill-name" id="txt-2">Arco</span></div>
+                <div class="skill-slot" id="slot-2" style="display: none;"><span class="skill-key">2</span><span class="skill-name" id="txt-2">-</span><div class="cooldown-overlay" id="cd-2"></div></div>
                 <div class="skill-slot" id="slot-3" style="display: none;"><span class="skill-key">3</span><span class="skill-name" id="txt-3">-</span><div class="cooldown-overlay" id="cd-3"></div></div>
                 <div class="skill-slot" id="slot-Space"><span class="skill-key">SPC</span><span class="skill-name" style="font-size: 0.5rem; bottom: 3px; position: absolute;">Passo</span><div class="cooldown-overlay" id="cd-Space"></div></div>
             </div>
@@ -237,6 +237,9 @@
                     player.bleedTimer = data.duration;
                     player.bleedDamage = data.baseDamage;
                 }
+                if(data.type === 'applyFreeze' && data.targetId === player.id) {
+                    player.freezeTimer = data.duration;
+                }
             }); 
         }
 
@@ -278,9 +281,9 @@
             x: WORLD_SIZE / 2, y: WORLD_SIZE / 2, angle: 0,
             baseSpeed: 4, speed: 4, size: 24, hp: 100, maxHp: 100, xp: 0, nextLevelXp: 150, level: 1, class: '',
             isInvisible: false, invisibleTimer: 0, isRolling: false, rollTimer: 0,
-            attackCooldown: 0, bleedTimer: 0, bleedDamage: 0,
+            attackCooldown: 0, bleedTimer: 0, bleedDamage: 0, freezeTimer: 0,
             stats: { forca: 0, agi: 0, int: 0 }, points: 0,
-            cooldowns: { 1: 0, 3: 0, Space: 0 },
+            cooldowns: { 1: 0, 2: 0, 3: 0, Space: 0 },
             weaponMode: 'arco', 
             backdashMode: false 
         };
@@ -298,7 +301,7 @@
                 size: isBoss ? 35 : 22, speed: isBoss ? 0.8 : 1.3, damage: isBoss ? 0.6 : 0.3,
                 xpValue: isBoss ? 90 : 45, isBoss: isBoss,
                 angle: 0, animFrame: Math.floor(Math.random() * 4), animTimer: 0,
-                bleedTimer: 0, bleedDamage: 0
+                bleedTimer: 0, bleedDamage: 0, freezeTimer: 0, iceInstances: {}
             };
         }
 
@@ -312,7 +315,11 @@
             document.getElementById('slot-2').style.display = 'none';
             document.getElementById('slot-3').style.display = 'none';
 
-            if (className === 'Mago') skill1Text = 'Ruína';
+            if (className === 'Mago') {
+                skill1Text = 'Ruína';
+                document.getElementById('slot-2').style.display = 'flex';
+                document.getElementById('txt-2').innerText = 'Gelo';
+            }
             if (className === 'Ranged') {
                 skill1Text = 'Seta';
                 document.getElementById('slot-2').style.display = 'flex';
@@ -345,22 +352,28 @@
                 inv.style.display = displayMode; side.style.display = displayMode;
             }
             
-            // TROCA DE ARMA DO RANGER COM A TECLA 2
-            if (key === '2' && player.class === 'Ranged' && !isDead) {
-                player.weaponMode = player.weaponMode === 'arco' ? 'adaga' : 'arco';
-                document.getElementById('txt-2').innerText = player.weaponMode === 'arco' ? 'Arco' : 'Adaga';
-                document.getElementById('txt-1').innerText = player.weaponMode === 'arco' ? 'Seta' : 'Recuo';
-                isQPressed = false;
-                chargeTimer = 0;
-                document.getElementById('charge-bar-container').style.display = 'none';
-                return;
+            // TECLA 2 (Troca do Ranger / Gelo do Mago)
+            if (key === '2' && !isDead && player.freezeTimer <= 0) {
+                if (player.class === 'Ranged') {
+                    player.weaponMode = player.weaponMode === 'arco' ? 'adaga' : 'arco';
+                    document.getElementById('txt-2').innerText = player.weaponMode === 'arco' ? 'Arco' : 'Adaga';
+                    document.getElementById('txt-1').innerText = player.weaponMode === 'arco' ? 'Seta' : 'Recuo';
+                    isQPressed = false;
+                    chargeTimer = 0;
+                    document.getElementById('charge-bar-container').style.display = 'none';
+                    return;
+                }
+                if (player.class === 'Mago' && player.cooldowns[2] <= 0) {
+                    triggerMagoGelo();
+                    return;
+                }
             }
 
             keys[key.toLowerCase()] = true;
-            if (key === ' ' && !isDead) triggerSkill('Space');
-            if (key === '3' && !isDead && player.class === 'Ladino') triggerLadinoBleedStrike();
+            if (key === ' ' && !isDead && player.freezeTimer <= 0) triggerSkill('Space');
+            if (key === '3' && !isDead && player.class === 'Ladino' && player.freezeTimer <= 0) triggerLadinoBleedStrike();
             
-            if (key === '1' && !isDead && player.cooldowns[1] <= 0) {
+            if (key === '1' && !isDead && player.cooldowns[1] <= 0 && player.freezeTimer <= 0) {
                 if (!isQPressed) {
                     if(player.class === 'Mago') { isQPressed = true; triggerMagoExplosive(); }
                     if(player.class === 'Ladino') { isQPressed = true; triggerLadinoSombras(); }
@@ -394,7 +407,7 @@
         
         window.addEventListener('mousedown', e => { 
             if (!gameRunning) return;
-            if (e.button === 0 && !isDead && player.attackCooldown <= 0) performBasicAttack();
+            if (e.button === 0 && !isDead && player.attackCooldown <= 0 && player.freezeTimer <= 0) performBasicAttack();
         });
 
         function updateStatsUI() {
@@ -458,7 +471,8 @@
                                     if (dotProduct > 0.3) finalDmg *= 2;
                                     if (player.isInvisible) player.isInvisible = false;
                                 }
-                                m.hp -= finalDmg; m.x += Math.cos(angle) * 12; m.y += Math.sin(angle) * 12;
+                                m.hp -= finalDmg; 
+                                if(m.freezeTimer <= 0) { m.x += Math.cos(angle) * 12; m.y += Math.sin(angle) * 12; }
                                 if (m.hp <= 0) player.xp += m.xpValue;
                             }
                         }
@@ -510,7 +524,8 @@
                         let angleToM = Math.atan2(m.y - player.y, m.x - player.x);
                         let diff = Math.atan2(Math.sin(angleToM - angle), Math.cos(angleToM - angle));
                         if (Math.abs(diff) < 1.3) {
-                            m.hp -= damage; m.x += Math.cos(angle) * 15; m.y += Math.sin(angle) * 15;
+                            m.hp -= damage; 
+                            if (m.freezeTimer <= 0) { m.x += Math.cos(angle) * 15; m.y += Math.sin(angle) * 15; }
                             if (m.hp <= 0) player.xp += m.xpValue;
                         }
                     }
@@ -532,6 +547,25 @@
                 maxRange: 7 * TILE_SIZE, damage: 55 + (player.stats.int * 7)
             });
             isQPressed = false; 
+        }
+
+        function triggerMagoGelo() {
+            player.cooldowns[2] = 300; // 5s Cooldown
+            let baseAngle = Math.atan2(mouseY - canvas.height/2, mouseX - canvas.width/2);
+            let iceCastId = Math.random().toString(); // ID Único desta conjuração para rastrear instâncias
+            let iceDmg = 12 + (player.stats.int * 1.5);
+
+            // Dispara 3 estacas em cone (-0.2, 0, +0.2 radianos)
+            let offsets = [-0.2, 0, 0.2];
+            offsets.forEach(offset => {
+                let finalAngle = baseAngle + offset;
+                projectiles.push({
+                    x: player.x, y: player.y, startX: player.x, startY: player.y, ownerId: player.id,
+                    vx: Math.cos(finalAngle) * 9, vy: Math.sin(finalAngle) * 9,
+                    size: 6, isFireball: false, isArrow: false, isIce: true, iceId: iceCastId,
+                    maxRange: 11 * TILE_SIZE, damage: iceDmg
+                });
+            });
         }
 
         function triggerLadinoSombras() {
@@ -595,7 +629,7 @@
 
         function handlePlayerDeath() {
             isDead = true; isQPressed = false; chargeTimer = 0; player.backdashMode = false;
-            player.bleedTimer = 0;
+            player.bleedTimer = 0; player.freezeTimer = 0;
             document.getElementById('charge-bar-container').style.display = 'none';
             let screen = document.getElementById('death-screen');
             screen.style.display = 'flex';
@@ -642,6 +676,8 @@
                 }
             }
 
+            if (player.freezeTimer > 0) player.freezeTimer--;
+
             gameTime = (gameTime + 1) % TOTAL_CYCLE;
             let isNight = gameTime >= DAY_DURATION;
             document.getElementById('time-indicator').innerText = isNight ? "TEMPO: NOITE" : "TEMPO: DIA";
@@ -655,10 +691,10 @@
                 document.getElementById('charge-bar-fill').style.width = `${(chargeTimer / 300) * 100}%`;
             }
 
-            let currentSpeed = player.speed;
+            let currentSpeed = player.freezeTimer > 0 ? 0 : player.speed;
             let moveX = 0, moveY = 0;
 
-            if (player.isRolling) {
+            if (player.isRolling && player.freezeTimer <= 0) {
                 if (player.backdashMode) {
                     moveX = -Math.cos(player.angle); moveY = -Math.sin(player.angle);
                     currentSpeed *= 2.2; 
@@ -672,7 +708,7 @@
                 }
                 player.rollTimer--;
                 if(player.rollTimer <= 0) { player.isRolling = false; player.backdashMode = false; }
-            } else {
+            } else if (player.freezeTimer <= 0) {
                 if (keys['w'] || keys['arrowup']) moveY -= 1;
                 if (keys['s'] || keys['arrowdown']) moveY += 1;
                 if (keys['a'] || keys['arrowleft']) moveX -= 1;
@@ -698,8 +734,12 @@
                         else if (player.class === 'Ladino') maxCd = 240;
                         else if (player.class === 'Ranged') maxCd = player.weaponMode === 'arco' ? 140 : 160;
                     }
+                    if(k === '2') {
+                        if (player.class === 'Mago') maxCd = 300;
+                    }
                     if(k === '3') maxCd = 360;
-                    document.getElementById(`cd-${k}`).style.height = (player.cooldowns[k] / maxCd) * 100 + '%'; 
+                    let overlay = document.getElementById(`cd-${k}`);
+                    if(overlay) overlay.style.height = (player.cooldowns[k] / maxCd) * 100 + '%'; 
                 } 
             }
 
@@ -715,6 +755,11 @@
                         hitSomething = true;
                         if(!p.isRedExplosive && conn && conn.open) {
                             conn.send({type: 'inflictDamage', targetId: pId, damage: p.damage});
+                            if (p.isIce) {
+                                // Envia gatilho de gelo via RPC/Lógica de P2P simplificada
+                                // Como não temos persistência complexa por frame, lidamos localmente ou enviamos evento
+                                conn.send({type: 'applyFreeze', targetId: pId, duration: 150}); // Se quiser travar direto via rede, ou gerenciar instâncias.
+                            }
                         }
                     }
                 });
@@ -724,6 +769,16 @@
                         if(Math.hypot(m.x - p.x, m.y - p.y) < m.size + p.size) {
                             hitSomething = true;
                             if(!p.isRedExplosive) m.hp -= p.damage; 
+                            
+                            // Lógica de instâncias de Gelo nos Monstros
+                            if (p.isIce) {
+                                if (!m.iceInstances[p.iceId]) m.iceInstances[p.iceId] = 0;
+                                m.iceInstances[p.iceId]++;
+                                
+                                if (m.iceInstances[p.iceId] >= 3) {
+                                    m.freezeTimer = 150; // 2.5 segundos paralisado (150 frames)
+                                }
+                            }
                         }
                     });
                 }
@@ -744,13 +799,15 @@
                         }
                     }
 
+                    if (m.freezeTimer > 0) m.freezeTimer--;
+
                     let targets = [player, ...Object.values(remotePlayers)].filter(t => t && t.class && !t.isInvisible && t.hp > 0);
                     if(targets.length === 0) return;
                     let closest = targets[0];
                     let minDist = Math.hypot(closest.x - m.x, closest.y - m.y);
                     m.angle = Math.atan2(closest.y - m.y, closest.x - m.x);
 
-                    if(minDist < 600) { 
+                    if(minDist < 600 && m.freezeTimer <= 0) { 
                         m.x += Math.cos(m.angle) * m.speed; m.y += Math.sin(m.angle) * m.speed; 
                         if(minDist < m.size + closest.size) {
                             if(closest.id === player.id) {
@@ -828,7 +885,19 @@
                     ctx.fillStyle = gradient; ctx.beginPath(); ctx.arc(0, 0, p.size, 0, Math.PI*2); ctx.fill();
                 } else if(p.isArrow) {
                     ctx.strokeStyle = p.isSuperArrow ? '#145c28' : '#6b5a40'; 
-                    ctx.lineWidth = p.size / 2; ctx.beginPath(); ctx.moveTo(-15, 0); ctx.lineTo(15, 0); stroke();
+                    ctx.lineWidth = p.size / 2; ctx.beginPath(); ctx.moveTo(-15, 0); ctx.lineTo(15, 0); ctx.stroke();
+                } else if(p.isIce) {
+                    // Render das Estacas de Gelo (Estilo Cristal Rígido/Afiado)
+                    ctx.fillStyle = 'rgba(140, 220, 255, 0.8)';
+                    ctx.strokeStyle = '#2bb3ff';
+                    ctx.lineWidth = 1.5;
+                    ctx.beginPath();
+                    ctx.moveTo(14, 0);
+                    ctx.lineTo(-8, -4);
+                    ctx.lineTo(-12, 0);
+                    ctx.lineTo(-8, 4);
+                    ctx.closePath();
+                    ctx.fill(); ctx.stroke();
                 }
                 ctx.restore();
             });
@@ -839,6 +908,8 @@
                 if (frameImg.complete) {
                     if (m.bleedTimer > 0 && Math.floor(m.bleedTimer / 4) % 2 === 0) {
                         ctx.filter = 'contrast(1.5) brightness(0.3) sepia(1) hue-rotate(-50deg)';
+                    } else if (m.freezeTimer > 0) {
+                        ctx.filter = 'hue-rotate(30deg) saturate(1.8) brightness(0.8) sepia(0.3)'; // Aura Azulada de Congelado
                     } else {
                         ctx.filter = isNight ? 'contrast(1.3) brightness(0.2) grayscale(0.3)' : 'contrast(1.1) brightness(0.45)';
                     }
@@ -846,6 +917,16 @@
                     ctx.filter = 'none';
                 }
                 ctx.restore();
+                
+                // Desenhar cubos de gelo visuais se o monstro estiver paralisado
+                if (m.freezeTimer > 0) {
+                    ctx.fillStyle = 'rgba(100, 200, 255, 0.4)';
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+                    ctx.lineWidth = 1;
+                    ctx.fillRect(m.x + camX - m.size - 2, m.y + camY - m.size - 2, m.size * 2 + 4, m.size * 2 + 4);
+                    ctx.strokeRect(m.x + camX - m.size - 2, m.y + camY - m.size - 2, m.size * 2 + 4, m.size * 2 + 4);
+                }
+
                 ctx.fillStyle = '#0d0a0a'; ctx.fillRect(m.x + camX - m.size, m.y + camY - m.size - 8, m.size * 2, 3);
                 ctx.fillStyle = m.bleedTimer > 0 ? '#7a0000' : '#3d1212'; 
                 ctx.fillRect(m.x + camX - m.size, m.y + camY - m.size - 8, (m.hp / m.maxHp) * (m.size * 2), 3);
@@ -871,10 +952,19 @@
                 if(player.isRolling) ctx.globalAlpha = 0.35;
                 let pImg = SPRITES[player.class.toLowerCase()] || SPRITES.guerreiro;
                 if (pImg.complete) {
-                    ctx.filter = isNight ? 'brightness(0.3)' : 'brightness(0.65)'; 
+                    if (player.freezeTimer > 0) {
+                        ctx.filter = 'hue-rotate(30deg) saturate(2) brightness(0.7)';
+                    } else {
+                        ctx.filter = isNight ? 'brightness(0.3)' : 'brightness(0.65)'; 
+                    }
                     ctx.drawImage(pImg, -player.size, -player.size, player.size*2, player.size*2); ctx.filter = 'none';
                 }
                 ctx.restore();
+
+                if (player.freezeTimer > 0) {
+                    ctx.fillStyle = 'rgba(70, 160, 240, 0.3)';
+                    ctx.fillRect(canvas.width/2 - player.size, canvas.height/2 - player.size, player.size*2, player.size*2);
+                }
 
                 if(player.bleedTimer > 0 && Math.floor(player.bleedTimer / 6) % 2 === 0) {
                     ctx.fillStyle = 'rgba(150, 0, 0, 0.15)';
