@@ -118,7 +118,7 @@
             <div class="card" onclick="selectClass('Ranged')">
                 <h2>RANGED</h2>
                 <div class="card-art"><img src="sprite/ranged.png" alt="Ranged"></div>
-                <p>Ataque Normal: Disparos ágeis.<br><br>Segure Q: Modula e canaliza a Seta Profana Verde.</p>
+                <p>Ataque Normal: Disparos ágeis.<br><br>W: Alterna para Adaga de Combate.<br><br>Q (Adaga): Corte com Rolamento Evasivo para trás.</p>
             </div>
             <div class="card" onclick="selectClass('Guerreiro')">
                 <h2>GUERREIRO</h2>
@@ -175,6 +175,7 @@
         <div id="hud-container">
             <div id="charge-bar-container"><div id="charge-bar-fill"></div></div>
             <div id="hud">
+                <div class="skill-slot" id="slot-W" style="display: none;"><span class="skill-key">W</span><span class="skill-name" id="txt-W">Arco</span></div>
                 <div class="skill-slot" id="slot-Q"><span class="skill-key">Q</span><span class="skill-name" id="txt-Q">-</span><div class="cooldown-overlay" id="cd-Q"></div></div>
                 <div class="skill-slot" id="slot-E" style="display: none;"><span class="skill-key">E</span><span class="skill-name" id="txt-E">-</span><div class="cooldown-overlay" id="cd-E"></div></div>
                 <div class="skill-slot" id="slot-Space"><span class="skill-key">SPC</span><span class="skill-name" style="font-size: 0.5rem; bottom: 3px; position: absolute;">Passo</span><div class="cooldown-overlay" id="cd-Space"></div></div>
@@ -218,14 +219,15 @@
 
         function setupChat() { 
             conn.on('data', data => { 
-                if(data.type === 'playerUpdate') {
+                if(!data || typeof data !== 'object') return;
+                
+                if(data.type === 'playerUpdate' && data.id) {
                     remotePlayers[data.id] = data.state;
                 }
-                if(data.type === 'projectiles') projectiles = data.list; 
+                if(data.type === 'projectiles') projectiles = data.list || []; 
                 if(data.type === 'meleeSlash') triggerRemoteSlash(data); 
                 if(data.type === 'explosion') triggerVisualExplosion(data); 
                 
-                // RECEBE O PACOTE DE DANO DO OUTRO PLAYER E DESCONTA LOCALMENTE
                 if(data.type === 'inflictDamage' && data.targetId === player.id) {
                     if(!player.isRolling && !isDead) {
                         player.hp -= data.damage;
@@ -278,7 +280,9 @@
             isInvisible: false, invisibleTimer: 0, isRolling: false, rollTimer: 0,
             attackCooldown: 0, bleedTimer: 0, bleedDamage: 0,
             stats: { forca: 0, agi: 0, int: 0 }, points: 0,
-            cooldowns: { Q: 0, E: 0, Space: 0 }
+            cooldowns: { Q: 0, E: 0, Space: 0 },
+            weaponMode: 'arco', // Apenas para o Ranged ('arco' ou 'adaga')
+            backdashMode: false // Mecânica de empuxo para trás do Ranged
         };
 
         let monsters = []; let projectiles = []; let visualSlashes = []; let visualExplosions = [];
@@ -302,10 +306,17 @@
             player.class = className;
             player.baseSpeed = className === 'Guerreiro' ? 4.3 : 4.0;
             player.speed = player.baseSpeed;
+            player.weaponMode = 'arco';
             
             let qText = '-';
+            document.getElementById('slot-W').style.display = 'none';
+
             if (className === 'Mago') qText = 'Ruína';
-            if (className === 'Ranged') qText = 'Seta';
+            if (className === 'Ranged') {
+                qText = 'Seta';
+                document.getElementById('slot-W').style.display = 'flex';
+                document.getElementById('txt-W').innerText = 'Arco';
+            }
             if (className === 'Ladino') { 
                 qText = 'Oculto'; 
                 document.getElementById('slot-E').style.display = 'flex';
@@ -323,30 +334,53 @@
         }
 
         window.addEventListener('keydown', e => {
+            if(!gameRunning) return;
+            let key = e.key.toLowerCase();
+            
             if(e.key === 'Tab') { 
                 e.preventDefault(); 
                 let inv = document.getElementById('inventory-center'); let side = document.getElementById('status-sidebar');
                 let displayMode = inv.style.display === 'block' ? 'none' : 'block';
                 inv.style.display = displayMode; side.style.display = displayMode;
             }
-            let key = e.key.toLowerCase(); keys[e.key] = true;
+            
+            // TROCA DE ARMA DO RANGER COM A TECLA W
+            if (key === 'w' && player.class === 'Ranged' && !isDead) {
+                player.weaponMode = player.weaponMode === 'arco' ? 'adaga' : 'arco';
+                document.getElementById('txt-W').innerText = player.weaponMode === 'arco' ? 'Arco' : 'Adaga';
+                document.getElementById('txt-Q').innerText = player.weaponMode === 'arco' ? 'Seta' : 'Recuo';
+                // Reseta carregamentos pendentes
+                isQPressed = false;
+                chargeTimer = 0;
+                document.getElementById('charge-bar-container').style.display = 'none';
+                return; // Impede que o W registre como movimento simultaneamente se as teclas padrões forem modificadas
+            }
+
+            keys[e.key] = true;
             if (key === ' ' && !isDead) triggerSkill('Space');
             if (key === 'e' && !isDead && player.class === 'Ladino') triggerLadinoBleedStrike();
             
-            if (key === 'q' && !isDead && gameRunning && player.cooldowns.Q <= 0) {
+            if (key === 'q' && !isDead && player.cooldowns.Q <= 0) {
                 if (!isQPressed) {
-                    isQPressed = true;
-                    if(player.class === 'Mago') triggerMagoExplosive();
-                    if(player.class === 'Ladino') triggerLadinoSombras();
+                    if(player.class === 'Mago') { isQPressed = true; triggerMagoExplosive(); }
+                    if(player.class === 'Ladino') { isQPressed = true; triggerLadinoSombras(); }
+                    if(player.class === 'Ranged') {
+                        if(player.weaponMode === 'arco') {
+                            isQPressed = true; // Ativa canalização da seta
+                        } else {
+                            triggerRangedRecuoAtaque(); // Ataque de adaga + salto automático para trás
+                        }
+                    }
                 }
             }
         });
 
         window.addEventListener('keyup', e => { 
+            if(!gameRunning) return;
             let key = e.key.toLowerCase(); keys[e.key] = false; 
             if(key === 'q' && isQPressed) {
                 isQPressed = false;
-                if(player.class === 'Ranged' && player.cooldowns.Q <= 0) fireRangedArrow();
+                if(player.class === 'Ranged' && player.weaponMode === 'arco' && player.cooldowns.Q <= 0) fireRangedArrow();
                 chargeTimer = 0;
                 document.getElementById('charge-bar-container').style.display = 'none';
             }
@@ -359,7 +393,8 @@
         window.addEventListener('mousemove', e => { mouseX = e.clientX; mouseY = e.clientY; });
         
         window.addEventListener('mousedown', e => { 
-            if (e.button === 0 && !isDead && gameRunning && player.attackCooldown <= 0) performBasicAttack();
+            if (!gameRunning) return;
+            if (e.button === 0 && !isDead && player.attackCooldown <= 0) performBasicAttack();
         });
 
         function updateStatsUI() {
@@ -380,17 +415,22 @@
         function performBasicAttack() {
             let angle = Math.atan2(mouseY - canvas.height/2, mouseX - canvas.width/2);
 
-            if (player.class === 'Guerreiro' || player.class === 'Ladino') {
-                player.attackCooldown = 20;
-                let range = 65;
-                let damage = (player.class === 'Guerreiro' ? 25 : 16) + (player.stats.forca * 3);
+            // ATAQUE DA ADAGA (RANGED EM MODO MELEE) OU CLASSES CORPO A CORPO PADRÃO
+            if (player.class === 'Guerreiro' || player.class === 'Ladino' || (player.class === 'Ranged' && player.weaponMode === 'adaga')) {
+                player.attackCooldown = player.class === 'Ranged' ? 15 : 20; // Adaga ataca um pouco mais rápido
+                let range = player.class === 'Ranged' ? 55 : 65;
+                let damage = 15;
+                
+                if (player.class === 'Guerreiro') damage = 25 + (player.stats.forca * 3);
+                if (player.class === 'Ladino') damage = 16 + (player.stats.forca * 3);
+                if (player.class === 'Ranged') damage = 14 + (player.stats.agi * 2.2); // Escala com Agilidade na Adaga
 
                 visualSlashes.push({ x: player.x, y: player.y, angle: angle, duration: 10, isBleed: false });
                 if(conn && conn.open) conn.send({type: 'meleeSlash', x: player.x, y: player.y, angle: angle});
 
-                // PVP FOGO AMIGO CORPORAL: Aplica dano direto ao alvo remoto
                 Object.keys(remotePlayers).forEach(pId => {
                     let rm = remotePlayers[pId];
+                    if(!rm || !rm.class) return;
                     if(rm.hp > 0 && !rm.isInvisible && Math.hypot(rm.x - player.x, rm.y - player.y) <= range + 24) {
                         let angleToM = Math.atan2(rm.y - player.y, rm.x - player.x);
                         let diff = Math.atan2(Math.sin(angleToM - angle), Math.cos(angleToM - angle));
@@ -398,7 +438,7 @@
                             let finalDmg = damage;
                             if(player.class === 'Ladino') {
                                 let dotProduct = Math.cos(rm.angle) * Math.cos(player.angle) + Math.sin(rm.angle) * Math.sin(player.angle);
-                                if (dotProduct > 0.3) finalDmg *= 2; // Backstab ativo
+                                if (dotProduct > 0.3) finalDmg *= 2; 
                                 if (player.isInvisible) player.isInvisible = false;
                             }
                             if(conn && conn.open) conn.send({type: 'inflictDamage', targetId: pId, damage: finalDmg});
@@ -433,7 +473,7 @@
                     vx: Math.cos(angle) * 11, vy: Math.sin(angle) * 11,
                     size: 8, isFireball: true, isBlue: true, maxRange: 12 * TILE_SIZE, damage: pDmg
                 });
-            } else if (player.class === 'Ranged') {
+            } else if (player.class === 'Ranged' && player.weaponMode === 'arco') {
                 player.attackCooldown = 18;
                 let pDmg = 14 + (player.stats.agi * 1.5);
                 projectiles.push({
@@ -442,6 +482,51 @@
                     size: 4, isFireball: false, isArrow: true, maxRange: 10 * TILE_SIZE, damage: pDmg
                 });
             }
+        }
+
+        // Q DO RANGER NO MODO ADAGA: INVESTIDA + CORTE + PARADA SÚBITA E PULO PRO TRÁS
+        function triggerRangedRecuoAtaque() {
+            player.cooldowns.Q = 160; // Cooldown equilibrado
+            let angle = Math.atan2(mouseY - canvas.height/2, mouseX - canvas.width/2);
+            let rangeAtaque = 65;
+            let damage = 25 + (player.stats.agi * 3.5);
+
+            // Projeta os efeitos visuais do corte na frente dele antes do salto recuar
+            visualSlashes.push({ x: player.x, y: player.y, angle: angle, duration: 12, isBleed: false });
+            if(conn && conn.open) conn.send({type: 'meleeSlash', x: player.x, y: player.y, angle: angle});
+
+            // Detecção PvP imediata da investida cortante
+            Object.keys(remotePlayers).forEach(pId => {
+                let rm = remotePlayers[pId];
+                if(!rm || !rm.class) return;
+                if(rm.hp > 0 && Math.hypot(rm.x - player.x, rm.y - player.y) <= rangeAtaque + 24) {
+                    let angleToM = Math.atan2(rm.y - player.y, rm.x - player.x);
+                    let diff = Math.atan2(Math.sin(angleToM - angle), Math.cos(angleToM - angle));
+                    if(Math.abs(diff) < 1.3) {
+                        if(conn && conn.open) conn.send({type: 'inflictDamage', targetId: pId, damage: damage});
+                    }
+                }
+            });
+
+            // Detecção PvE nos monstros
+            if (isHost) {
+                monsters.forEach(m => {
+                    if (Math.hypot(m.x - player.x, m.y - player.y) <= rangeAtaque + m.size) {
+                        let angleToM = Math.atan2(m.y - player.y, m.x - player.x);
+                        let diff = Math.atan2(Math.sin(angleToM - angle), Math.cos(angleToM - angle));
+                        if (Math.abs(diff) < 1.3) {
+                            m.hp -= damage;
+                            m.x += Math.cos(angle) * 15; m.y += Math.sin(angle) * 15; // Repulsão leve no monstro
+                            if (m.hp <= 0) player.xp += m.xpValue;
+                        }
+                    }
+                });
+            }
+
+            // ATIVA FÍSICA DE RECUO: Habilita frames de rolamento invisível para trás sem consumir a barra nativa do espaço
+            player.isRolling = true;
+            player.rollTimer = 20; // Duração do pulo protetor
+            player.backdashMode = true; // Identificador lógico para empurrar no sentido inverso
         }
 
         function triggerMagoExplosive() {
@@ -475,9 +560,9 @@
             visualSlashes.push({ x: player.x, y: player.y, angle: angle, duration: 12, isBleed: true });
             if(conn && conn.open) conn.send({type: 'meleeSlash', x: player.x, y: player.y, angle: angle});
 
-            // PVP FOGO AMIGO: Aplica sangramento no player inimigo
             Object.keys(remotePlayers).forEach(pId => {
                 let rm = remotePlayers[pId];
+                if(!rm || !rm.class) return;
                 if(rm.hp > 0 && Math.hypot(rm.x - player.x, rm.y - player.y) <= range + 24) {
                     if(conn && conn.open) {
                         conn.send({type: 'inflictDamage', targetId: pId, damage: instantDmg});
@@ -514,11 +599,11 @@
 
         function triggerSkill(skill) {
             if (!gameRunning || player.cooldowns[skill] > 0 || isDead) return;
-            if (skill === 'Space') { player.cooldowns[skill] = 90; player.isRolling = true; player.rollTimer = 18; }
+            if (skill === 'Space') { player.cooldowns[skill] = 90; player.isRolling = true; player.rollTimer = 18; player.backdashMode = false; }
         }
 
         function handlePlayerDeath() {
-            isDead = true; isQPressed = false; chargeTimer = 0;
+            isDead = true; isQPressed = false; chargeTimer = 0; player.backdashMode = false;
             player.bleedTimer = 0;
             document.getElementById('charge-bar-container').style.display = 'none';
             let screen = document.getElementById('death-screen');
@@ -536,9 +621,9 @@
             visualExplosions.push({ x: p.x, y: p.y, radius: radius, alpha: 1.0 });
             if(conn && conn.open) conn.send({type: 'explosion', x: p.x, y: p.y, radius: radius});
 
-            // PVP FOGO AMIGO: Dano em área de explosão
             Object.keys(remotePlayers).forEach(pId => {
                 let rm = remotePlayers[pId];
+                if(!rm || !rm.class) return;
                 if(rm.hp > 0 && Math.hypot(rm.x - p.x, rm.y - p.y) <= radius) {
                     if(conn && conn.open) conn.send({type: 'inflictDamage', targetId: pId, damage: p.damage});
                 }
@@ -554,15 +639,14 @@
         }
 
         function update() {
-            if(isDead) return;
+            if(!gameRunning || isDead) return;
             if(player.hp <= 0) { handlePlayerDeath(); return; }
 
-            // MECÂNICA DE SANGRAMENTO DESESPERADOR (EXECUÇÃO POR VIDA PERDIDA)
             if (player.bleedTimer > 0) {
                 player.bleedTimer--;
                 if (player.bleedTimer % 60 === 0) {
                     let vidaPerdidaPct = 1 - (player.hp / player.maxHp); 
-                    let multiplicadorDesespero = 1 + (vidaPerdidaPct * 2.5); // Escala agressivamente até 3.5x com quase 0 HP
+                    let multiplicadorDesespero = 1 + (vidaPerdidaPct * 2.5); 
                     player.hp -= player.bleedDamage * multiplicadorDesespero;
                 }
             }
@@ -574,21 +658,42 @@
             player.angle = Math.atan2(mouseY - canvas.height/2, mouseX - canvas.width/2);
             if (player.attackCooldown > 0) player.attackCooldown--;
 
-            if(isQPressed && player.class === 'Ranged' && player.cooldowns.Q <= 0) {
+            if(isQPressed && player.class === 'Ranged' && player.weaponMode === 'arco' && player.cooldowns.Q <= 0) {
                 if(chargeTimer < 300) chargeTimer++; 
                 document.getElementById('charge-bar-container').style.display = 'block';
                 document.getElementById('charge-bar-fill').style.width = `${(chargeTimer / 300) * 100}%`;
             }
 
+            // GESTÃO DO MOVIMENTO E FÍSICA DO ROLLING / BACKDASH DO Q
             let currentSpeed = player.speed;
-            if (player.isRolling) { currentSpeed *= 1.8; player.rollTimer--; if(player.rollTimer <= 0) player.isRolling = false; }
-
             let moveX = 0, moveY = 0;
-            if (keys['w'] || keys['arrowup']) moveY -= 1;
-            if (keys['s'] || keys['arrowdown']) moveY += 1;
-            if (keys['a'] || keys['arrowleft']) moveX -= 1;
-            if (keys['d'] || keys['arrowright']) moveX += 1;
-            if (moveX !== 0 && moveY !== 0) { moveX *= 0.707; moveY *= 0.707; }
+
+            if (player.isRolling) {
+                if (player.backdashMode) {
+                    // Empurra na direção oposta ao ponteiro do mouse (Física de Recuo Tático do Ranger)
+                    moveX = -Math.cos(player.angle);
+                    moveY = -Math.sin(player.angle);
+                    currentSpeed *= 2.2; // Rolamento evasivo ligeiramente mais veloz
+                } else {
+                    // Rolamento padrão direcionado pelas teclas
+                    if (keys['w'] || keys['arrowup']) moveY -= 1;
+                    if (keys['s'] || keys['arrowdown']) moveY += 1;
+                    if (keys['a'] || keys['arrowleft']) moveX -= 1;
+                    if (keys['d'] || keys['arrowright']) moveX += 1;
+                    if (moveX === 0 && moveY === 0) { moveX = Math.cos(player.angle); moveY = Math.sin(player.angle); }
+                    currentSpeed *= 1.8;
+                }
+                player.rollTimer--;
+                if(player.rollTimer <= 0) { player.isRolling = false; player.backdashMode = false; }
+            } else {
+                // Movimentação Normal controlada por teclas
+                if (keys['w'] || keys['arrowup']) moveY -= 1;
+                if (keys['s'] || keys['arrowdown']) moveY += 1;
+                if (keys['a'] || keys['arrowleft']) moveX -= 1;
+                if (keys['d'] || keys['arrowright']) moveX += 1;
+            }
+            
+            if (moveX !== 0 && moveY !== 0 && !player.backdashMode) { moveX *= 0.707; moveY *= 0.707; }
             
             player.x = Math.max(0, Math.min(WORLD_SIZE, player.x + moveX * currentSpeed));
             player.y = Math.max(0, Math.min(WORLD_SIZE, player.y + moveY * currentSpeed));
@@ -602,7 +707,11 @@
                 if (player.cooldowns[k] > 0) { 
                     player.cooldowns[k]--; 
                     let maxCd = 90;
-                    if(k === 'Q') maxCd = (player.class === 'Mago' ? 480 : (player.class==='Ladino'? 240 : 140));
+                    if(k === 'Q') {
+                        if (player.class === 'Mago') maxCd = 480;
+                        else if (player.class === 'Ladino') maxCd = 240;
+                        else if (player.class === 'Ranged') maxCd = player.weaponMode === 'arco' ? 140 : 160;
+                    }
                     if(k === 'E') maxCd = 360;
                     document.getElementById(`cd-${k}`).style.height = (player.cooldowns[k] / maxCd) * 100 + '%'; 
                 } 
@@ -613,9 +722,9 @@
                 let distTraveled = Math.hypot(p.x - p.startX, p.y - p.startY);
                 let hitSomething = false;
 
-                // PVP FOGO AMIGO PROJÉTEIS: Detecção de acerto e colisão direta
                 Object.keys(remotePlayers).forEach(pId => {
                     let rm = remotePlayers[pId];
+                    if(!rm || !rm.class) return;
                     if(p.ownerId !== pId && rm.hp > 0 && Math.hypot(rm.x - p.x, rm.y - p.y) < 24 + p.size) {
                         hitSomething = true;
                         if(!p.isRedExplosive && conn && conn.open) {
@@ -649,7 +758,7 @@
                         }
                     }
 
-                    let targets = [player, ...Object.values(remotePlayers)].filter(t => !t.isInvisible && t.hp > 0);
+                    let targets = [player, ...Object.values(remotePlayers)].filter(t => t && t.class && !t.isInvisible && t.hp > 0);
                     if(targets.length === 0) return;
                     let closest = targets[0];
                     let minDist = Math.hypot(closest.x - m.x, closest.y - m.y);
@@ -689,6 +798,7 @@
         }
 
         function render() {
+            if(!gameRunning) return;
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             let camX = canvas.width / 2 - player.x; let camY = canvas.height / 2 - player.y;
 
@@ -756,7 +866,7 @@
             });
 
             Object.values(remotePlayers).forEach(np => {
-                if(np.isInvisible || np.hp <= 0) return;
+                if(!np || !np.class || np.isInvisible || np.hp <= 0) return;
                 ctx.save(); ctx.translate(np.x + camX, np.y + camY); ctx.rotate(np.angle);
                 let img = SPRITES[np.class.toLowerCase()] || SPRITES.guerreiro;
                 if(img.complete) {
@@ -765,7 +875,6 @@
                 }
                 ctx.restore();
 
-                // Barra de vida renderizada dinamicamente para o outro player no seu canvas
                 ctx.fillStyle = '#0d0a0a'; ctx.fillRect(np.x + camX - 20, np.y + camY - 28, 40, 3);
                 ctx.fillStyle = '#9c1c1c'; ctx.fillRect(np.x + camX - 20, np.y + camY - 28, Math.max(0, (np.hp / 100)) * 40, 3);
             });
