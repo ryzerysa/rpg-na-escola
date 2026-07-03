@@ -113,22 +113,22 @@
             <div class="card" onclick="selectClass('Mago')">
                 <h2>MAGO</h2>
                 <div class="card-art"><img src="sprite/mago.png" alt="Mago"></div>
-                <p>Ataque Normal: Orbe azul ciano veloz.<br><br>Q: Impacto Destrutivo Vermelho (8s CD).</p>
+                <p>Ataque Normal: Orbe azul ciano veloz.<br><br>Habilidade [1]: Ruína Vermelha (8s CD).</p>
             </div>
             <div class="card" onclick="selectClass('Ranged')">
                 <h2>RANGED</h2>
                 <div class="card-art"><img src="sprite/ranged.png" alt="Ranged"></div>
-                <p>Ataque Normal: Disparos ágeis.<br><br>W: Alterna para Adaga de Combate.<br><br>Q (Adaga): Corte com Rolamento Evasivo para trás.</p>
+                <p>Ataque Normal: Disparos ágeis.<br><br>Habilidade [2]: Troca para Arco / Adaga.<br><br>Habilidade [1] (Modo Adaga): Corte com Salto de Recuo Tático.</p>
             </div>
             <div class="card" onclick="selectClass('Guerreiro')">
                 <h2>GUERREIRO</h2>
                 <div class="card-art"><img src="sprite/guerreiro.png" alt="Guerreiro"></div>
-                <p>Ataque Normal: Golpes brutais e pesados de espada curta em área.</p>
+                <p>Ataque Normal: Golpes brutais de espada curta em área.</p>
             </div>
             <div class="card" onclick="selectClass('Ladino')">
                 <h2>LADINO</h2>
                 <div class="card-art"><img src="sprite/ladino.png" alt="Ladino"></div>
-                <p>Q: Dissipa-se nas sombras (Furtivo). Danos por trás duplicados.<br><br>E: Gume Sangrento (5s de Sangramento Dinâmico).</p>
+                <p>Habilidade [1]: Furtividade (Dano dobrado por trás).<br><br>Habilidade [3]: Sangramento Dinâmico.</p>
             </div>
         </div>
     </div>
@@ -175,9 +175,9 @@
         <div id="hud-container">
             <div id="charge-bar-container"><div id="charge-bar-fill"></div></div>
             <div id="hud">
-                <div class="skill-slot" id="slot-W" style="display: none;"><span class="skill-key">W</span><span class="skill-name" id="txt-W">Arco</span></div>
-                <div class="skill-slot" id="slot-Q"><span class="skill-key">Q</span><span class="skill-name" id="txt-Q">-</span><div class="cooldown-overlay" id="cd-Q"></div></div>
-                <div class="skill-slot" id="slot-E" style="display: none;"><span class="skill-key">E</span><span class="skill-name" id="txt-E">-</span><div class="cooldown-overlay" id="cd-E"></div></div>
+                <div class="skill-slot" id="slot-1"><span class="skill-key">1</span><span class="skill-name" id="txt-1">-</span><div class="cooldown-overlay" id="cd-1"></div></div>
+                <div class="skill-slot" id="slot-2" style="display: none;"><span class="skill-key">2</span><span class="skill-name" id="txt-2">Arco</span></div>
+                <div class="skill-slot" id="slot-3" style="display: none;"><span class="skill-key">3</span><span class="skill-name" id="txt-3">-</span><div class="cooldown-overlay" id="cd-3"></div></div>
                 <div class="skill-slot" id="slot-Space"><span class="skill-key">SPC</span><span class="skill-name" style="font-size: 0.5rem; bottom: 3px; position: absolute;">Passo</span><div class="cooldown-overlay" id="cd-Space"></div></div>
             </div>
         </div>
@@ -280,9 +280,9 @@
             isInvisible: false, invisibleTimer: 0, isRolling: false, rollTimer: 0,
             attackCooldown: 0, bleedTimer: 0, bleedDamage: 0,
             stats: { forca: 0, agi: 0, int: 0 }, points: 0,
-            cooldowns: { Q: 0, E: 0, Space: 0 },
-            weaponMode: 'arco', // Apenas para o Ranged ('arco' ou 'adaga')
-            backdashMode: false // Mecânica de empuxo para trás do Ranged
+            cooldowns: { 1: 0, 3: 0, Space: 0 },
+            weaponMode: 'arco', 
+            backdashMode: false 
         };
 
         let monsters = []; let projectiles = []; let visualSlashes = []; let visualExplosions = [];
@@ -308,21 +308,22 @@
             player.speed = player.baseSpeed;
             player.weaponMode = 'arco';
             
-            let qText = '-';
-            document.getElementById('slot-W').style.display = 'none';
+            let skill1Text = '-';
+            document.getElementById('slot-2').style.display = 'none';
+            document.getElementById('slot-3').style.display = 'none';
 
-            if (className === 'Mago') qText = 'Ruína';
+            if (className === 'Mago') skill1Text = 'Ruína';
             if (className === 'Ranged') {
-                qText = 'Seta';
-                document.getElementById('slot-W').style.display = 'flex';
-                document.getElementById('txt-W').innerText = 'Arco';
+                skill1Text = 'Seta';
+                document.getElementById('slot-2').style.display = 'flex';
+                document.getElementById('txt-2').innerText = 'Arco';
             }
             if (className === 'Ladino') { 
-                qText = 'Oculto'; 
-                document.getElementById('slot-E').style.display = 'flex';
-                document.getElementById('txt-E').innerText = 'Sangue';
+                skill1Text = 'Oculto'; 
+                document.getElementById('slot-3').style.display = 'flex';
+                document.getElementById('txt-3').innerText = 'Sangue';
             }
-            document.getElementById('txt-Q').innerText = qText;
+            document.getElementById('txt-1').innerText = skill1Text;
             
             let previewImg = document.getElementById('char-inv-img');
             previewImg.src = `sprite/${className.toLowerCase()}.png`;
@@ -335,40 +336,39 @@
 
         window.addEventListener('keydown', e => {
             if(!gameRunning) return;
-            let key = e.key.toLowerCase();
+            let key = e.key;
             
-            if(e.key === 'Tab') { 
+            if(key === 'Tab') { 
                 e.preventDefault(); 
                 let inv = document.getElementById('inventory-center'); let side = document.getElementById('status-sidebar');
                 let displayMode = inv.style.display === 'block' ? 'none' : 'block';
                 inv.style.display = displayMode; side.style.display = displayMode;
             }
             
-            // TROCA DE ARMA DO RANGER COM A TECLA W
-            if (key === 'w' && player.class === 'Ranged' && !isDead) {
+            // TROCA DE ARMA DO RANGER COM A TECLA 2
+            if (key === '2' && player.class === 'Ranged' && !isDead) {
                 player.weaponMode = player.weaponMode === 'arco' ? 'adaga' : 'arco';
-                document.getElementById('txt-W').innerText = player.weaponMode === 'arco' ? 'Arco' : 'Adaga';
-                document.getElementById('txt-Q').innerText = player.weaponMode === 'arco' ? 'Seta' : 'Recuo';
-                // Reseta carregamentos pendentes
+                document.getElementById('txt-2').innerText = player.weaponMode === 'arco' ? 'Arco' : 'Adaga';
+                document.getElementById('txt-1').innerText = player.weaponMode === 'arco' ? 'Seta' : 'Recuo';
                 isQPressed = false;
                 chargeTimer = 0;
                 document.getElementById('charge-bar-container').style.display = 'none';
-                return; // Impede que o W registre como movimento simultaneamente se as teclas padrões forem modificadas
+                return;
             }
 
-            keys[e.key] = true;
+            keys[key.toLowerCase()] = true;
             if (key === ' ' && !isDead) triggerSkill('Space');
-            if (key === 'e' && !isDead && player.class === 'Ladino') triggerLadinoBleedStrike();
+            if (key === '3' && !isDead && player.class === 'Ladino') triggerLadinoBleedStrike();
             
-            if (key === 'q' && !isDead && player.cooldowns.Q <= 0) {
+            if (key === '1' && !isDead && player.cooldowns[1] <= 0) {
                 if (!isQPressed) {
                     if(player.class === 'Mago') { isQPressed = true; triggerMagoExplosive(); }
                     if(player.class === 'Ladino') { isQPressed = true; triggerLadinoSombras(); }
                     if(player.class === 'Ranged') {
                         if(player.weaponMode === 'arco') {
-                            isQPressed = true; // Ativa canalização da seta
+                            isQPressed = true; 
                         } else {
-                            triggerRangedRecuoAtaque(); // Ataque de adaga + salto automático para trás
+                            triggerRangedRecuoAtaque(); 
                         }
                     }
                 }
@@ -377,10 +377,10 @@
 
         window.addEventListener('keyup', e => { 
             if(!gameRunning) return;
-            let key = e.key.toLowerCase(); keys[e.key] = false; 
-            if(key === 'q' && isQPressed) {
+            let key = e.key; keys[key.toLowerCase()] = false; 
+            if(key === '1' && isQPressed) {
                 isQPressed = false;
-                if(player.class === 'Ranged' && player.weaponMode === 'arco' && player.cooldowns.Q <= 0) fireRangedArrow();
+                if(player.class === 'Ranged' && player.weaponMode === 'arco' && player.cooldowns[1] <= 0) fireRangedArrow();
                 chargeTimer = 0;
                 document.getElementById('charge-bar-container').style.display = 'none';
             }
@@ -415,15 +415,14 @@
         function performBasicAttack() {
             let angle = Math.atan2(mouseY - canvas.height/2, mouseX - canvas.width/2);
 
-            // ATAQUE DA ADAGA (RANGED EM MODO MELEE) OU CLASSES CORPO A CORPO PADRÃO
             if (player.class === 'Guerreiro' || player.class === 'Ladino' || (player.class === 'Ranged' && player.weaponMode === 'adaga')) {
-                player.attackCooldown = player.class === 'Ranged' ? 15 : 20; // Adaga ataca um pouco mais rápido
+                player.attackCooldown = player.class === 'Ranged' ? 15 : 20; 
                 let range = player.class === 'Ranged' ? 55 : 65;
                 let damage = 15;
                 
                 if (player.class === 'Guerreiro') damage = 25 + (player.stats.forca * 3);
                 if (player.class === 'Ladino') damage = 16 + (player.stats.forca * 3);
-                if (player.class === 'Ranged') damage = 14 + (player.stats.agi * 2.2); // Escala com Agilidade na Adaga
+                if (player.class === 'Ranged') damage = 14 + (player.stats.agi * 2.2); 
 
                 visualSlashes.push({ x: player.x, y: player.y, angle: angle, duration: 10, isBleed: false });
                 if(conn && conn.open) conn.send({type: 'meleeSlash', x: player.x, y: player.y, angle: angle});
@@ -484,18 +483,15 @@
             }
         }
 
-        // Q DO RANGER NO MODO ADAGA: INVESTIDA + CORTE + PARADA SÚBITA E PULO PRO TRÁS
         function triggerRangedRecuoAtaque() {
-            player.cooldowns.Q = 160; // Cooldown equilibrado
+            player.cooldowns[1] = 160; 
             let angle = Math.atan2(mouseY - canvas.height/2, mouseX - canvas.width/2);
             let rangeAtaque = 65;
             let damage = 25 + (player.stats.agi * 3.5);
 
-            // Projeta os efeitos visuais do corte na frente dele antes do salto recuar
             visualSlashes.push({ x: player.x, y: player.y, angle: angle, duration: 12, isBleed: false });
             if(conn && conn.open) conn.send({type: 'meleeSlash', x: player.x, y: player.y, angle: angle});
 
-            // Detecção PvP imediata da investida cortante
             Object.keys(remotePlayers).forEach(pId => {
                 let rm = remotePlayers[pId];
                 if(!rm || !rm.class) return;
@@ -508,29 +504,26 @@
                 }
             });
 
-            // Detecção PvE nos monstros
             if (isHost) {
                 monsters.forEach(m => {
                     if (Math.hypot(m.x - player.x, m.y - player.y) <= rangeAtaque + m.size) {
                         let angleToM = Math.atan2(m.y - player.y, m.x - player.x);
                         let diff = Math.atan2(Math.sin(angleToM - angle), Math.cos(angleToM - angle));
                         if (Math.abs(diff) < 1.3) {
-                            m.hp -= damage;
-                            m.x += Math.cos(angle) * 15; m.y += Math.sin(angle) * 15; // Repulsão leve no monstro
+                            m.hp -= damage; m.x += Math.cos(angle) * 15; m.y += Math.sin(angle) * 15;
                             if (m.hp <= 0) player.xp += m.xpValue;
                         }
                     }
                 });
             }
 
-            // ATIVA FÍSICA DE RECUO: Habilita frames de rolamento invisível para trás sem consumir a barra nativa do espaço
             player.isRolling = true;
-            player.rollTimer = 20; // Duração do pulo protetor
-            player.backdashMode = true; // Identificador lógico para empurrar no sentido inverso
+            player.rollTimer = 20; 
+            player.backdashMode = true; 
         }
 
         function triggerMagoExplosive() {
-            player.cooldowns.Q = 480; 
+            player.cooldowns[1] = 480; 
             let angle = Math.atan2(mouseY - canvas.height/2, mouseX - canvas.width/2);
             projectiles.push({
                 x: player.x, y: player.y, startX: player.x, startY: player.y, ownerId: player.id,
@@ -542,15 +535,15 @@
         }
 
         function triggerLadinoSombras() {
-            player.cooldowns.Q = 240; 
+            player.cooldowns[1] = 240; 
             player.isInvisible = true;
             player.invisibleTimer = 360; 
             isQPressed = false;
         }
 
         function triggerLadinoBleedStrike() {
-            if (player.cooldowns.E > 0) return;
-            player.cooldowns.E = 360; 
+            if (player.cooldowns[3] > 0) return;
+            player.cooldowns[3] = 360; 
             
             let angle = Math.atan2(mouseY - canvas.height/2, mouseX - canvas.width/2);
             let range = 70;
@@ -574,16 +567,14 @@
             if (isHost) {
                 monsters.forEach(m => {
                     if (Math.hypot(m.x - player.x, m.y - player.y) <= range + m.size) {
-                        m.hp -= instantDmg;
-                        m.bleedTimer = 300; 
-                        m.bleedDamage = tickDmg;
+                        m.hp -= instantDmg; m.bleedTimer = 300; m.bleedDamage = tickDmg;
                     }
                 });
             }
         }
 
         function fireRangedArrow() {
-            player.cooldowns.Q = 140; 
+            player.cooldowns[1] = 140; 
             let angle = Math.atan2(mouseY - canvas.height/2, mouseX - canvas.width/2);
             let pct = Math.min(chargeTimer / 300, 1.0); 
             projectiles.push({
@@ -658,24 +649,20 @@
             player.angle = Math.atan2(mouseY - canvas.height/2, mouseX - canvas.width/2);
             if (player.attackCooldown > 0) player.attackCooldown--;
 
-            if(isQPressed && player.class === 'Ranged' && player.weaponMode === 'arco' && player.cooldowns.Q <= 0) {
+            if(isQPressed && player.class === 'Ranged' && player.weaponMode === 'arco' && player.cooldowns[1] <= 0) {
                 if(chargeTimer < 300) chargeTimer++; 
                 document.getElementById('charge-bar-container').style.display = 'block';
                 document.getElementById('charge-bar-fill').style.width = `${(chargeTimer / 300) * 100}%`;
             }
 
-            // GESTÃO DO MOVIMENTO E FÍSICA DO ROLLING / BACKDASH DO Q
             let currentSpeed = player.speed;
             let moveX = 0, moveY = 0;
 
             if (player.isRolling) {
                 if (player.backdashMode) {
-                    // Empurra na direção oposta ao ponteiro do mouse (Física de Recuo Tático do Ranger)
-                    moveX = -Math.cos(player.angle);
-                    moveY = -Math.sin(player.angle);
-                    currentSpeed *= 2.2; // Rolamento evasivo ligeiramente mais veloz
+                    moveX = -Math.cos(player.angle); moveY = -Math.sin(player.angle);
+                    currentSpeed *= 2.2; 
                 } else {
-                    // Rolamento padrão direcionado pelas teclas
                     if (keys['w'] || keys['arrowup']) moveY -= 1;
                     if (keys['s'] || keys['arrowdown']) moveY += 1;
                     if (keys['a'] || keys['arrowleft']) moveX -= 1;
@@ -686,7 +673,6 @@
                 player.rollTimer--;
                 if(player.rollTimer <= 0) { player.isRolling = false; player.backdashMode = false; }
             } else {
-                // Movimentação Normal controlada por teclas
                 if (keys['w'] || keys['arrowup']) moveY -= 1;
                 if (keys['s'] || keys['arrowdown']) moveY += 1;
                 if (keys['a'] || keys['arrowleft']) moveX -= 1;
@@ -707,12 +693,12 @@
                 if (player.cooldowns[k] > 0) { 
                     player.cooldowns[k]--; 
                     let maxCd = 90;
-                    if(k === 'Q') {
+                    if(k === '1') {
                         if (player.class === 'Mago') maxCd = 480;
                         else if (player.class === 'Ladino') maxCd = 240;
                         else if (player.class === 'Ranged') maxCd = player.weaponMode === 'arco' ? 140 : 160;
                     }
-                    if(k === 'E') maxCd = 360;
+                    if(k === '3') maxCd = 360;
                     document.getElementById(`cd-${k}`).style.height = (player.cooldowns[k] / maxCd) * 100 + '%'; 
                 } 
             }
@@ -842,7 +828,7 @@
                     ctx.fillStyle = gradient; ctx.beginPath(); ctx.arc(0, 0, p.size, 0, Math.PI*2); ctx.fill();
                 } else if(p.isArrow) {
                     ctx.strokeStyle = p.isSuperArrow ? '#145c28' : '#6b5a40'; 
-                    ctx.lineWidth = p.size / 2; ctx.beginPath(); ctx.moveTo(-15, 0); ctx.lineTo(15, 0); ctx.stroke();
+                    ctx.lineWidth = p.size / 2; ctx.beginPath(); ctx.moveTo(-15, 0); ctx.lineTo(15, 0); stroke();
                 }
                 ctx.restore();
             });
