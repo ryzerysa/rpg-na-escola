@@ -2,576 +2,128 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ecos do Vazio - Pure Dark Fantasy Edition</title>
-    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <title>RPG Canvas Game</title>
     <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
-        body { background: #010102; font-family: 'Cinzel', 'Georgia', serif; color: #a19682; overflow: hidden; }
-        
-        /* LOBBY MEDIEVAL SOMBRIO */
-        #char-selection {
-            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-            background: radial-gradient(circle, #0a080c 0%, #010102 100%);
-            display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10;
-        }
-        h1 { margin-bottom: 20px; color: #8c7038; font-size: 2.3rem; letter-spacing: 6px; font-weight: normal; text-shadow: 0 0 15px rgba(0,0,0,0.9); }
-        
-        .mp-controls { background: rgba(10, 8, 7, 0.9); padding: 12px; border: 1px solid #2d2419; margin-bottom: 30px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: center; }
-        .mp-controls input { background: #000; border: 1px solid #4a3b25; color: #d1c7b7; padding: 6px; font-family: inherit; }
-        .mp-controls button { background: #2d2419; border: 1px solid #5c4724; color: #8c7038; padding: 6px 12px; font-weight: bold; cursor: pointer; font-family: inherit; }
-        .mp-controls button:hover { background: #5c4724; color: #fff; }
-        
-        .copy-btn { background: #1a140f; border: 1px solid #3d3120; color: #8c7038; padding: 4px 10px; font-size: 0.7rem; cursor: pointer; font-family: inherit; margin-left: 8px; font-weight: bold; letter-spacing: 1px; }
-        .copy-btn:hover { background: #3d3120; color: #fff; }
-
-        #mp-status-msg { color: #5cb85c; font-size: 0.85rem; margin-top: 10px; font-weight: bold; letter-spacing: 1px; min-height: 20px; text-shadow: 0 0 8px rgba(92,184,92,0.4); }
-
-        .cards-container { display: flex; gap: 20px; }
-        .card {
-            width: 210px; height: 350px; background: #050404; border: 1px solid #2d2419;
-            cursor: pointer; transition: all 0.4s ease; display: flex; flex-direction: column; align-items: center;
-            padding: 15px; position: relative;
-        }
-        .card:hover { border-color: #8c7038; box-shadow: 0 0 15px rgba(140, 112, 56, 0.2); }
-        .card h2 { margin-top: 10px; font-size: 1.3rem; color: #8c7038; font-weight: normal; letter-spacing: 2px; }
-        .card-art { width: 110px; height: 120px; background: #000; margin: 15px 0; border: 1px solid #1a140f; display: flex; align-items: center; justify-content: center; }
-        .card-art img { width: 100%; height: 100%; object-fit: contain; filter: grayscale(0.5) brightness(0.6); }
-        .card p { font-size: 0.75rem; text-align: center; color: #6e6452; line-height: 1.4; font-family: 'Georgia', serif; }
-        
-        /* HUD */
-        #game-container { display: none; position: relative; width: 100vw; height: 100vh; }
-        canvas { display: block; background: #010102; }
-        
-        #time-indicator { position: absolute; top: 25px; right: 25px; font-size: 0.75rem; color: #8c7038; letter-spacing: 2px; z-index: 5; text-shadow: 1px 1px 2px #000; background: rgba(0,0,0,0.7); padding: 4px 8px; border: 1px solid #211a12; }
-
-        .hud-bar-container { position: absolute; top: 25px; left: 25px; display: flex; flex-direction: column; gap: 4px; z-index: 5; }
-        #hud-level { font-size: 0.85rem; font-weight: normal; margin-bottom: 2px; color: #8c7038; letter-spacing: 1px; text-shadow: 1px 1px 2px #000; }
-        .bar { width: 260px; height: 10px; background: rgba(15, 12, 12, 0.7); border: 1px solid #1a1515; position: relative; box-shadow: inset 0 0 3px #000; }
-        .bar-fill { height: 100%; width: 100%; transition: width 0.1s ease-out; }
-        #hp-fill { background: #4a0d0d; } 
-        #xp-fill { background: #1b3d4f; } 
-        .bar-text { position: absolute; width: 100%; text-align: right; font-size: 0.6rem; top: -12px; color: #635b4f; letter-spacing: 1px; }
-
-        #hud-container { position: absolute; bottom: 25px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 6px; pointer-events: none; z-index: 5;}
-        
-        #charge-bar-container { width: 160px; height: 5px; background: #000; border: 1px solid #2d2419; display: none; overflow: hidden; }
-        #charge-bar-fill { width: 0%; height: 100%; background: #13421d; }
-
-        #hud { display: flex; gap: 10px; background: rgba(5, 4, 4, 0.85); padding: 8px; border: 1px solid #211a12; }
-        .skill-slot { width: 48px; height: 48px; background: #080707; border: 1px solid #33291d; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; overflow: hidden; }
-        .skill-key { position: absolute; top: 1px; left: 3px; font-size: 0.6rem; color: #8c7038; z-index: 6; }
-        .skill-name { font-size: 0.58rem; text-align: center; z-index: 5; color: #7a705f; pointer-events: none; width: 100%; text-transform: uppercase; letter-spacing: 0.5px; }
-        .cooldown-overlay { position: absolute; bottom: 0; left: 0; width: 100%; height: 0%; background: rgba(0,0,0,0.85); z-index: 7; border-top: 1px solid #4a1212; }
-        .active-overlay { position: absolute; inset: 0; background: rgba(214, 103, 34, 0.2); border: 1px solid #d66722; z-index: 4; display: none; }
-
-        #death-screen { 
-            display: none; position: fixed; top:0; left:0; width:100vw; height:100vh; 
-            background: rgba(0, 0, 0, 0.0); flex-direction: column; align-items: center; justify-content: center; 
-            z-index: 20; pointer-events: none; transition: background 2.5s ease-in-out;
-        }
-        #death-screen h2 { 
-            color: #5e1111; font-size: 3.5rem; font-weight: normal; letter-spacing: 16px; 
-            text-shadow: 0 0 30px #000; opacity: 0; transform: scale(0.96);
-            transition: opacity 1.8s ease-out, transform 3.5s ease-out;
-        }
-        #death-screen.active { background: #020000; }
-        #death-screen.active h2 { opacity: 1; transform: scale(1.0); }
-
-        #status-sidebar { display: none; position: fixed; left: 25px; top: 90px; width: 220px; background: rgba(5, 4, 4, 0.95); border: 1px solid #33291d; padding: 12px; z-index: 15; }
-        #inventory-center { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 440px; background: rgba(5, 4, 4, 0.97); border: 1px solid #33291d; padding: 20px; z-index: 15; }
-        
-        .inv-title { font-size: 0.95rem; color: #8c7038; border-bottom: 1px solid #211a12; padding-bottom: 4px; margin-bottom: 12px; text-align: center; letter-spacing: 1.5px; text-transform: uppercase; }
-        .stat-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; font-size: 0.8rem; letter-spacing: 0.5px; }
-        .stat-btn { background: #14110f; border: 1px solid #33291d; color: #8c7038; width: 18px; height: 18px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; font-family: inherit;}
-        .stat-btn:hover { background: #33291d; color: #fff; }
-        .points-indicator { text-align: center; color: #8c7038; font-style: italic; margin-bottom: 12px; font-size: 0.75rem; border-bottom: 1px dashed #211a12; padding-bottom: 6px; }
-        
-        .character-doll-container { display: flex; justify-content: center; align-items: center; gap: 20px; margin-bottom: 20px; background: rgba(0,0,0,0.5); padding: 12px; border: 1px solid #14110f; }
-        .equipment-column { display: flex; flex-direction: column; gap: 12px; }
-        .char-preview-box { width: 100px; height: 130px; background: #010101; border: 1px dashed #2d2419; display: flex; align-items: center; justify-content: center; }
-        .char-preview-box img { width: 70px; height: 70px; object-fit: contain; filter: brightness(0.5) grayscale(0.2); }
-        
-        .inv-slot { width: 45px; height: 45px; background: #020202; border: 1px solid #1f1811; display: flex; align-items: center; justify-content: center; font-size: 0.55rem; color: #3d3428; }
-        .inv-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; border-top: 1px solid #211a12; padding-top: 12px; }
+        body { margin: 0; overflow: hidden; background: #000; font-family: sans-serif; }
+        canvas { display: block; margin: 0 auto; }
+        #hud { position: absolute; top: 10px; left: 10px; color: white; }
+        .bar-container { width: 200px; height: 20px; background: #333; margin: 5px 0; position: relative; }
+        .bar-fill { height: 100%; width: 100%; transition: width 0.1s; }
+        #hp-fill { background: red; }
+        #xp-fill { background: green; }
+        .bar-text { position: absolute; width: 100%; text-align: center; top: 0; left: 0; font-size: 12px; line-height: 20px; }
+        #time-indicator { position: absolute; top: 10px; right: 10px; color: white; font-weight: bold; }
+        #charge-bar-container { position: absolute; bottom: 50px; left: 50%; transform: translateX(-50%); width: 150px; height: 10px; background: #222; display: none; }
+        #charge-bar-fill { height: 100%; width: 0%; background: orange; }
+        #death-screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); color: red; font-size: 48px; display: none; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.5s; }
+        #death-screen.active { opacity: 1; }
+        #torch-overlay { display: none; }
+        .cd-overlay { position: absolute; background: rgba(0,0,0,0.5); width: 100%; height: 0%; bottom: 0; }
     </style>
 </head>
 <body>
-
-    <div id="char-selection">
-        <h1>ECOS DO VAZIO</h1>
-        <div class="mp-controls">
-            <div style="margin-right: 15px; display: flex; align-items: center;">
-                <span style="color: #8c7038; font-size: 0.8rem; letter-spacing: 1px; margin-right: 5px;">ID DO ABISMO:</span> 
-                <span id="my-peer-id" style="color: #aaa; font-family: monospace; font-weight: bold;">Carregando...</span>
-                <button class="copy-btn" id="btn-copiar" onclick="copyIdToClipboard()">COPIAR</button>
-            </div>
-            <input type="text" id="join-peer-id" placeholder="ID da outra alma">
-            <button onclick="connectToPeer()">CONECTAR</button>
+    <div id="hud">
+        <div id="hud-level">VIGOR NÍVEL: 1</div>
+        <div class="bar-container">
+            <div id="hp-fill" class="bar-fill"></div>
+            <div id="hp-text" class="bar-text">100 / 100</div>
         </div>
-        <div id="mp-status-msg"></div>
-        <div class="cards-container" style="margin-top: 15px;">
-            <div class="card" onclick="selectClass('Mago')">
-                <h2>MAGO</h2>
-                <div class="card-art"><img src="sprite/mago.png" alt="Mago"></div>
-                <p>Ataque Normal: Orbe azul ciano veloz.<br><br>Habilidade [1]: Ruína Vermelha (8s CD).<br><br>Habilidade [2]: Estacas de Gelo (Acertar as 3 estacas paralisa por 2.5s).</p>
-            </div>
-            <div class="card" onclick="selectClass('Ranged')">
-                <h2>RANGED</h2>
-                <div class="card-art"><img src="sprite/ranged.png" alt="Ranged"></div>
-                <p>Ataque Normal: Disparos ágeis.<br><br>Habilidade [2]: Troca para Arco / Adaga.<br><br>Habilidade [1] (Modo Adaga): Corte com Salto de Recuo Tático.</p>
-            </div>
-            <div class="card" onclick="selectClass('Guerreiro')">
-                <h2>GUERREIRO</h2>
-                <div class="card-art"><img src="sprite/guerreiro.png" alt="Guerreiro"></div>
-                <p>Ataque Normal: Golpes brutais de espada curta em área.</p>
-            </div>
-            <div class="card" onclick="selectClass('Ladino')">
-                <h2>LADINO</h2>
-                <div class="card-art"><img src="sprite/ladino.png" alt="Ladino"></div>
-                <p>Habilidade [1]: Furtividade (Dano dobrado por trás).<br><br>Habilidade [3]: Sangramento Dinâmico.</p>
-            </div>
+        <div class="bar-container">
+            <div id="xp-fill" class="bar-fill"></div>
+            <div id="xp-text" class="bar-text">0 / 100</div>
         </div>
     </div>
+    <div id="time-indicator">TEMPO: DIA</div>
+    <div id="charge-bar-container"><div id="charge-bar-fill"></div></div>
+    <div id="death-screen">VOCÊ MORREU</div>
+    <div id="torch-overlay"></div>
 
-    <div id="death-screen">
-        <h2>A ESCURIDÃO TE CONSUMIU</h2>
-    </div>
-
-    <div id="status-sidebar">
-        <div class="inv-title">Atributos</div>
-        <div class="points-indicator" id="stat-points">Pontos: 0</div>
-        <div class="stat-row"><span>FORÇA: <strong id="val-forca">0</strong></span><button class="stat-btn" onclick="upgradeStat('forca')">+</button></div>
-        <div class="stat-row"><span>AGILIDADE: <strong id="val-agi">0</strong></span><button class="stat-btn" onclick="upgradeStat('agi')">+</button></div>
-        <div class="stat-row"><span>INTELIGÊNCIA: <strong id="val-int">0</strong></span><button class="stat-btn" onclick="upgradeStat('int')">+</button></div>
-    </div>
-
-    <div id="inventory-center">
-        <div class="inv-title">Pertences do Condenado</div>
-        <div class="character-doll-container">
-            <div class="equipment-column">
-                <div class="inv-slot"><span>Elmo</span></div>
-                <div class="inv-slot"><span>Arma</span></div>
-            </div>
-            <div class="char-preview-box"><img id="char-inv-img" src="" alt="Hero"></div>
-            <div class="equipment-column">
-                <div class="inv-slot"><span>Manto</span></div>
-                <div class="inv-slot"><span>Anel</span></div>
-            </div>
-        </div>
-        <div class="inv-grid">
-            <div class="inv-slot"></div><div class="inv-slot"></div><div class="inv-slot"></div><div class="inv-slot"></div><div class="inv-slot"></div><div class="inv-slot"></div>
-            <div class="inv-slot"></div><div class="inv-slot"></div><div class="inv-slot"></div><div class="inv-slot"></div><div class="inv-slot"></div><div class="inv-slot"></div>
-        </div>
-    </div>
-
-    <div id="game-container">
-        <div id="time-indicator">TEMPO: DIA</div>
-        <div class="hud-bar-container">
-            <div id="hud-level">VIGOR NÍVEL: 1</div>
-            <div class="bar"><div id="hp-fill" class="bar-fill"></div><div class="bar-text" id="hp-text">100 / 100</div></div>
-            <div class="bar"><div id="xp-fill" class="bar-fill"></div><div class="bar-text" id="xp-text">0 / 100</div></div>
-        </div>
-        
-        <div id="hud-container">
-            <div id="charge-bar-container"><div id="charge-bar-fill"></div></div>
-            <div id="hud">
-                <div class="skill-slot" id="slot-1"><span class="skill-key">1</span><span class="skill-name" id="txt-1">-</span><div class="cooldown-overlay" id="cd-1"></div></div>
-                <div class="skill-slot" id="slot-2" style="display: none;"><span class="skill-key">2</span><span class="skill-name" id="txt-2">-</span><div class="cooldown-overlay" id="cd-2"></div></div>
-                <div class="skill-slot" id="slot-3" style="display: none;"><span class="skill-key">3</span><span class="skill-name" id="txt-3">-</span><div class="cooldown-overlay" id="cd-3"></div></div>
-                <div class="skill-slot" id="slot-Space"><span class="skill-key">SPC</span><span class="skill-name" style="font-size: 0.5rem; bottom: 3px; position: absolute;">Passo</span><div class="cooldown-overlay" id="cd-Space"></div></div>
-                <div class="skill-slot" id="slot-5"><span class="skill-key">5</span><span class="skill-name" style="font-size: 0.5rem; bottom: 3px; position: absolute;">Tocha</span><div class="active-overlay" id="torch-overlay"></div></div>
-            </div>
-        </div>
-        <canvas id="gameCanvas"></canvas>
-    </div>
+    <canvas id="gameCanvas"></canvas>
 
     <script>
-        let peer = new Peer();
-        let conn = null; let isHost = true; let remotePlayers = {}; 
-
-        peer.on('open', id => { 
-            document.getElementById('my-peer-id').innerText = id; 
-        });
-
-        peer.on('connection', connection => { 
-            conn = connection; 
-            isHost = true; 
-            setupChat(); 
-            document.getElementById('mp-status-msg').innerText = "CONEXÃO ESTABELECIDA! Almas vinculadas.";
-            document.getElementById('mp-status-msg').style.color = "#5cb85c";
-        });
-
-        function connectToPeer() { 
-            let targetId = document.getElementById('join-peer-id').value.trim(); 
-            if(targetId) { 
-                document.getElementById('mp-status-msg').innerText = "Tentando conectar ao abismo...";
-                document.getElementById('mp-status-msg').style.color = "#8c7038";
-                
-                conn = peer.connect(targetId); 
-                isHost = false; 
-                
-                conn.on('open', () => {
-                    setupChat(); 
-                    document.getElementById('mp-status-msg').innerText = "CONEXÃO ESTABELECIDA! Almas vinculadas.";
-                    document.getElementById('mp-status-msg').style.color = "#5cb85c";
-                });
-            } 
-        }
-
-        function setupChat() { 
-            conn.on('data', data => { 
-                if(!data || typeof data !== 'object') return;
-                
-                if(data.type === 'playerUpdate' && data.id) {
-                    remotePlayers[data.id] = data.state;
-                }
-                if(data.type === 'projectiles') projectiles = data.list || []; 
-                if(data.type === 'meleeSlash') triggerRemoteSlash(data); 
-                if(data.type === 'explosion') triggerVisualExplosion(data); 
-                
-                if(data.type === 'timeSync' && !isHost) {
-                    gameTime = data.time;
-                }
-                
-                if(data.type === 'inflictDamage' && data.targetId === player.id) {
-                    if(!player.isRolling && !isDead) {
-                        player.hp -= data.damage;
-                    }
-                }
-                if(data.type === 'applyBleed' && data.targetId === player.id) {
-                    player.bleedTimer = data.duration;
-                    player.bleedDamage = data.baseDamage;
-                }
-                if(data.type === 'applyFreeze' && data.targetId === player.id) {
-                    player.freezeTimer = data.duration;
-                }
-            }); 
-        }
-
-        function copyIdToClipboard() {
-            let idText = document.getElementById('my-peer-id').innerText;
-            if (idText && idText !== "Carregando..." && idText !== "...") {
-                navigator.clipboard.writeText(idText).then(() => {
-                    let btn = document.getElementById('btn-copiar');
-                    btn.innerText = "COPIADO!";
-                    setTimeout(() => { btn.innerText = "COPIAR"; }, 1500);
-                }).catch(err => {
-                    console.error("Erro ao copiar: ", err);
-                });
-            }
-        }
-
-        const SPRITES = {
-            ladino: new Image(), mago: new Image(), ranged: new Image(), guerreiro: new Image(),
-            golemWalk: [new Image(), new Image(), new Image(), new Image()],
-            monstroOlho: new Image() // Carregamento do novo monstro
-        };
-        SPRITES.ladino.src = 'sprite/ladino.png'; SPRITES.mago.src = 'sprite/mago.png'; SPRITES.ranged.src = 'sprite/ranged.png'; SPRITES.guerreiro.src = 'sprite/guerreiro.png';
-        for(let i=0; i<4; i++) SPRITES.golemWalk[i].src = `sprite/andar ${i+1}.png`;
-        SPRITES.monstroOlho.src = 'sprite/monstro olho.png'; // Verifique se o nome do arquivo está exato
-
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
-        
-        const TILE_SIZE = 32;
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        // --- VARIÁVEIS GLOBAIS DE CONFIGURAÇÃO ---
         const WORLD_SIZE = 3000;
-
-        let keys = {}; let gameRunning = false; let isDead = false;
-        let isQPressed = false; let chargeTimer = 0;
-
-        let gameTime = 0;
+        const TILE_SIZE = 64;
         const DAY_DURATION = 1800; 
-        const TOTAL_CYCLE = 3600;  
+        const TOTAL_CYCLE = 3600;
+        const MAX_MONSTERS = 20;
+        let gameRunning = true;
+        let isDead = false;
+        let isHost = true; 
+        let gameTime = 0;
+        let mouseY = 0, mouseX = 0;
+        let isQPressed = false;
+        let chargeTimer = 0;
+        let keys = {};
+        let conn = null; 
 
+        // Listas globais
+        let projectiles = [];
+        let monsters = [];
+        let remotePlayers = {};
+        let visualSlashes = [];
+        let visualExplosions = [];
+
+        // Estrutura do jogador local
         let player = {
-            id: Math.random().toString(36).substring(2, 9),
-            x: WORLD_SIZE / 2, y: WORLD_SIZE / 2, angle: 0,
-            baseSpeed: 4, speed: 4, size: 24, hp: 100, maxHp: 100, xp: 0, nextLevelXp: 150, level: 1, class: '',
-            isInvisible: false, invisibleTimer: 0, isRolling: false, rollTimer: 0,
-            attackCooldown: 0, bleedTimer: 0, bleedDamage: 0, freezeTimer: 0,
-            stats: { forca: 0, agi: 0, int: 0 }, points: 0,
-            cooldowns: { 1: 0, 2: 0, 3: 0, Space: 0 },
-            weaponMode: 'arco', 
-            backdashMode: false,
-            hasTorchActive: false 
+            id: "local_player", x: WORLD_SIZE/2, y: WORLD_SIZE/2, size: 20, speed: 4,
+            class: 'Mago', weaponMode: 'cajado', hp: 100, maxHp: 100, xp: 0, nextLevelXp: 100, level: 1, points: 0,
+            stats: { int: 10, agi: 5, forca: 5 }, cooldowns: { '1': 0, '2': 0, '3': 0, 'Space': 0 },
+            isRolling: false, rollTimer: 0, backdashMode: false, bleedTimer: 0, freezeTimer: 0, bleedDamage: 0,
+            isInvisible: false, invisibleTimer: 0, hasTorchActive: false, angle: 0, attackCooldown: 0 // Altere hasTorchActive para testar a tocha
         };
 
-        let monsters = []; let projectiles = []; let visualSlashes = []; let visualExplosions = [];
-        const MAX_MONSTERS = 9;
+        // --- CARREGAMENTO DE SPRITES ---
+        const SPRITES = {
+            guerreiro: new Image(),
+            mago: new Image(),
+            ladino: new Image(),
+            ranged: new Image(),
+            golemWalk: [new Image(), new Image(), new Image(), new Image()],
+            monstroOlho: new Image(),
+            bolaDeFogo: new Image() 
+        };
 
-        // Função de spawn inteligente baseada no tempo
-        function spawnInitialMonsters() { 
-            if(!isHost) return; 
-            for (let i = 0; i < MAX_MONSTERS; i++) { 
-                // No início do jogo (geralmente dia), spawna apenas golems
-                monsters.push(createGolemMonster()); 
-            } 
-        }
-        
+        SPRITES.guerreiro.src = 'guerreiro.png';
+        SPRITES.mago.src = 'mago.png';
+        SPRITES.ladino.src = 'ladino.png';
+        SPRITES.ranged.src = 'ranged.png';
+        SPRITES.golemWalk[0].src = 'golem1.png';
+        SPRITES.golemWalk[1].src = 'golem2.png';
+        SPRITES.golemWalk[2].src = 'golem3.png';
+        SPRITES.golemWalk[3].src = 'golem4.png';
+        SPRITES.monstroOlho.src = 'olho.png';
+        SPRITES.bolaDeFogo.src = 'bola de fogo.png'; 
+
+        // --- FUNÇÕES AUXILIARES DE CRIAÇÃO ---
         function createGolemMonster() {
-            let isBoss = Math.random() < 0.20; 
             return {
-                id: Math.random().toString(), type: 'golem', x: Math.random() * WORLD_SIZE, y: Math.random() * WORLD_SIZE,
-                hp: isBoss ? 130 : 65, maxHp: isBoss ? 130 : 65,
-                size: isBoss ? 35 : 22, speed: isBoss ? 0.8 : 1.3, damage: isBoss ? 0.6 : 0.3,
-                xpValue: isBoss ? 90 : 45, isBoss: isBoss,
-                angle: 0, animFrame: Math.floor(Math.random() * 4), animTimer: 0,
-                bleedTimer: 0, bleedDamage: 0, freezeTimer: 0, iceInstances: {}
+                x: Math.random() * WORLD_SIZE, y: Math.random() * WORLD_SIZE,
+                type: 'golem', size: 30, speed: 1.5, hp: 50, maxHp: 50, damage: 10, xpValue: 25,
+                bleedTimer: 0, bleedDamage: 0, freezeTimer: 0, animFrame: 0, animTimer: 0, angle: 0, iceInstances: {}
             };
         }
 
-        // NOVO MONSTRO: Olho Perseguidor (Apenas Noite)
         function createOlhoMonster() {
-            // Olhos são mais rápidos, dão mais dano, mas têm menos vida que golems normais
             return {
-                id: Math.random().toString(), type: 'olho', x: Math.random() * WORLD_SIZE, y: Math.random() * WORLD_SIZE,
-                hp: 40, maxHp: 40,
-                size: 20, speed: 2.1, damage: 0.5,
-                xpValue: 60, isBoss: false, // Olhos não são bosses por enquanto
-                angle: 0, animFrame: 0, animTimer: 0, // Olho não tem animação de andar
-                bleedTimer: 0, bleedDamage: 0, freezeTimer: 0, iceInstances: {}
+                x: Math.random() * WORLD_SIZE, y: Math.random() * WORLD_SIZE,
+                type: 'olho',
+                size: player.size * 2, 
+                speed: 2.5, hp: 35, maxHp: 35, damage: 15, xpValue: 30,
+                bleedTimer: 0, bleedDamage: 0, freezeTimer: 0, animFrame: 0, animTimer: 0, angle: 0, iceInstances: {}
             };
         }
 
-        function selectClass(className) {
-            player.class = className;
-            player.baseSpeed = className === 'Guerreiro' ? 4.3 : 4.0;
-            player.speed = player.baseSpeed;
-            player.weaponMode = 'arco';
-            
-            let skill1Text = '-';
-            document.getElementById('slot-2').style.display = 'none';
-            document.getElementById('slot-3').style.display = 'none';
+        function updateStatsUI() {}
 
-            if (className === 'Mago') {
-                skill1Text = 'Ruína';
-                document.getElementById('slot-2').style.display = 'flex';
-                document.getElementById('txt-2').innerText = 'Gelo';
-            }
-            if (className === 'Ranged') {
-                skill1Text = 'Seta';
-                document.getElementById('slot-2').style.display = 'flex';
-                document.getElementById('txt-2').innerText = 'Arco';
-            }
-            if (className === 'Ladino') { 
-                skill1Text = 'Oculto'; 
-                document.getElementById('slot-3').style.display = 'flex';
-                document.getElementById('txt-3').innerText = 'Sangue';
-            }
-            document.getElementById('txt-1').innerText = skill1Text;
-            
-            let previewImg = document.getElementById('char-inv-img');
-            previewImg.src = `sprite/${className.toLowerCase()}.png`;
-
-            document.getElementById('char-selection').style.display = 'none';
-            document.getElementById('game-container').style.display = 'block';
-            resizeCanvas(); spawnInitialMonsters(); gameRunning = true; updateStatsUI();
-            window.requestAnimationFrame(gameLoop);
-        }
-
-        window.addEventListener('keydown', e => {
-            if(!gameRunning) return;
-            let key = e.key;
-            
-            if(key === 'Tab') { 
-                e.preventDefault(); 
-                let inv = document.getElementById('inventory-center'); let side = document.getElementById('status-sidebar');
-                let displayMode = inv.style.display === 'block' ? 'none' : 'block';
-                inv.style.display = displayMode; side.style.display = displayMode;
-            }
-            
-            if (key === '5' && !isDead) {
-                player.hasTorchActive = !player.hasTorchActive;
-                document.getElementById('torch-overlay').style.display = player.hasTorchActive ? 'block' : 'none';
-                return;
-            }
-            
-            if (key === '2' && !isDead && player.freezeTimer <= 0) {
-                if (player.class === 'Ranged') {
-                    player.weaponMode = player.weaponMode === 'arco' ? 'adaga' : 'arco';
-                    document.getElementById('txt-2').innerText = player.weaponMode === 'arco' ? 'Arco' : 'Adaga';
-                    document.getElementById('txt-1').innerText = player.weaponMode === 'arco' ? 'Seta' : 'Recuo';
-                    isQPressed = false;
-                    chargeTimer = 0;
-                    document.getElementById('charge-bar-container').style.display = 'none';
-                    return;
-                }
-                if (player.class === 'Mago' && player.cooldowns[2] <= 0) {
-                    triggerMagoGelo();
-                    return;
-                }
-            }
-
-            keys[key.toLowerCase()] = true;
-            if (key === ' ' && !isDead && player.freezeTimer <= 0) triggerSkill('Space');
-            if (key === '3' && !isDead && player.class === 'Ladino' && player.freezeTimer <= 0) triggerLadinoBleedStrike();
-            
-            if (key === '1' && !isDead && player.cooldowns[1] <= 0 && player.freezeTimer <= 0) {
-                if (!isQPressed) {
-                    if(player.class === 'Mago') { isQPressed = true; triggerMagoExplosive(); }
-                    if(player.class === 'Ladino') { isQPressed = true; triggerLadinoSombras(); }
-                    if(player.class === 'Ranged') {
-                        if(player.weaponMode === 'arco') {
-                            isQPressed = true; 
-                        } else {
-                            triggerRangedRecuoAtaque(); 
-                        }
-                    }
-                }
-            }
-        });
-
-        window.addEventListener('keyup', e => { 
-            if(!gameRunning) return;
-            let key = e.key; keys[key.toLowerCase()] = false; 
-            if(key === '1' && isQPressed) {
-                isQPressed = false;
-                if(player.class === 'Ranged' && player.weaponMode === 'arco' && player.cooldowns[1] <= 0) fireRangedArrow();
-                chargeTimer = 0;
-                document.getElementById('charge-bar-container').style.display = 'none';
-            }
-        });
-
-        window.addEventListener('resize', resizeCanvas);
-        function resizeCanvas() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
-        
-        let mouseX = 0, mouseY = 0;
-        window.addEventListener('mousemove', e => { mouseX = e.clientX; mouseY = e.clientY; });
-        
-        window.addEventListener('mousedown', e => { 
-            if (!gameRunning) return;
-            if (e.button === 0 && !isDead && player.attackCooldown <= 0 && player.freezeTimer <= 0) performBasicAttack();
-        });
-
-        function updateStatsUI() {
-            document.getElementById('stat-points').innerText = `Pontos: ${player.points}`;
-            document.getElementById('val-forca').innerText = player.stats.forca;
-            document.getElementById('val-agi').innerText = player.stats.agi;
-            document.getElementById('val-int').innerText = player.stats.int;
-        }
-
-        function upgradeStat(statName) {
-            if(player.points > 0) {
-                player.points--; player.stats[statName]++;
-                if(statName === 'agi') player.speed = player.baseSpeed + (player.stats.agi * 0.15);
-                updateStatsUI();
-            }
-        }
-
-        function performBasicAttack() {
-            let angle = Math.atan2(mouseY - canvas.height/2, mouseX - canvas.width/2);
-
-            if (player.class === 'Guerreiro' || player.class === 'Ladino' || (player.class === 'Ranged' && player.weaponMode === 'adaga')) {
-                player.attackCooldown = player.class === 'Ranged' ? 15 : 20; 
-                let range = player.class === 'Ranged' ? 55 : 65;
-                let damage = 15;
-                
-                if (player.class === 'Guerreiro') damage = 25 + (player.stats.forca * 3);
-                if (player.class === 'Ladino') damage = 16 + (player.stats.forca * 3);
-                if (player.class === 'Ranged') damage = 14 + (player.stats.agi * 2.2); 
-
-                visualSlashes.push({ x: player.x, y: player.y, angle: angle, duration: 10, isBleed: false });
-                if(conn && conn.open) conn.send({type: 'meleeSlash', x: player.x, y: player.y, angle: angle});
-
-                Object.keys(remotePlayers).forEach(pId => {
-                    let rm = remotePlayers[pId];
-                    if(!rm || !rm.class) return;
-                    if(rm.hp > 0 && !rm.isInvisible && Math.hypot(rm.x - player.x, rm.y - player.y) <= range + 24) {
-                        let angleToM = Math.atan2(rm.y - player.y, rm.x - player.x);
-                        let diff = Math.atan2(Math.sin(angleToM - angle), Math.cos(angleToM - angle));
-                        if(Math.abs(diff) < 1.1) {
-                            let finalDmg = damage;
-                            if(player.class === 'Ladino') {
-                                let dotProduct = Math.cos(rm.angle) * Math.cos(player.angle) + Math.sin(rm.angle) * Math.sin(player.angle);
-                                if (dotProduct > 0.3) finalDmg *= 2; 
-                                if (player.isInvisible) player.isInvisible = false;
-                            }
-                            if(conn && conn.open) conn.send({type: 'inflictDamage', targetId: pId, damage: finalDmg});
-                        }
-                    }
-                });
-
-                if (isHost) {
-                    monsters.forEach(m => {
-                        if (Math.hypot(m.x - player.x, m.y - player.y) <= range + m.size) {
-                            let angleToM = Math.atan2(m.y - player.y, m.x - player.x);
-                            let diff = Math.atan2(Math.sin(angleToM - angle), Math.cos(angleToM - angle));
-                            
-                            if (Math.abs(diff) < 1.1) {
-                                let finalDmg = damage;
-                                if (player.class === 'Ladino') {
-                                    let dotProduct = Math.cos(m.angle) * Math.cos(player.angle) + Math.sin(m.angle) * Math.sin(player.angle);
-                                    if (dotProduct > 0.3) finalDmg *= 2;
-                                    if (player.isInvisible) player.isInvisible = false;
-                                }
-                                m.hp -= finalDmg; 
-                                if(m.freezeTimer <= 0) { m.x += Math.cos(angle) * 12; m.y += Math.sin(angle) * 12; }
-                                if (m.hp <= 0) player.xp += m.xpValue;
-                            }
-                        }
-                    });
-                }
-            } else if (player.class === 'Mago') {
-                player.attackCooldown = 25; 
-                let pDmg = 18 + (player.stats.int * 2);
-                projectiles.push({
-                    x: player.x, y: player.y, startX: player.x, startY: player.y, ownerId: player.id,
-                    vx: Math.cos(angle) * 11, vy: Math.sin(angle) * 11,
-                    size: 8, isFireball: true, isBlue: true, maxRange: 12 * TILE_SIZE, damage: pDmg
-                });
-            } else if (player.class === 'Ranged' && player.weaponMode === 'arco') {
-                player.attackCooldown = 18;
-                let pDmg = 14 + (player.stats.agi * 1.5);
-                projectiles.push({
-                    x: player.x, y: player.y, startX: player.x, startY: player.y, ownerId: player.id,
-                    vx: Math.cos(angle) * 12, vy: Math.sin(angle) * 12,
-                    size: 4, isFireball: false, isArrow: true, maxRange: 10 * TILE_SIZE, damage: pDmg
-                });
-            }
-        }
-
-        function triggerRangedRecuoAtaque() {
-            player.cooldowns[1] = 160; 
-            let angle = Math.atan2(mouseY - canvas.height/2, mouseX - canvas.width/2);
-            let rangeAtaque = 65;
-            let damage = 25 + (player.stats.agi * 3.5);
-
-            visualSlashes.push({ x: player.x, y: player.y, angle: angle, duration: 12, isBleed: false });
-            if(conn && conn.open) conn.send({type: 'meleeSlash', x: player.x, y: player.y, angle: angle});
-
-            Object.keys(remotePlayers).forEach(pId => {
-                let rm = remotePlayers[pId];
-                if(!rm || !rm.class) return;
-                if(rm.hp > 0 && Math.hypot(rm.x - player.x, rm.y - player.y) <= rangeAtaque + 24) {
-                    let angleToM = Math.atan2(rm.y - player.y, rm.x - player.x);
-                    let diff = Math.atan2(Math.sin(angleToM - angle), Math.cos(angleToM - angle));
-                    if(Math.abs(diff) < 1.3) {
-                        if(conn && conn.open) conn.send({type: 'inflictDamage', targetId: pId, damage: damage});
-                    }
-                }
-            });
-
-            if (isHost) {
-                monsters.forEach(m => {
-                    if (Math.hypot(m.x - player.x, m.y - player.y) <= rangeAtaque + m.size) {
-                        let angleToM = Math.atan2(m.y - player.y, m.x - player.x);
-                        let diff = Math.atan2(Math.sin(angleToM - angle), Math.cos(angleToM - angle));
-                        if (Math.abs(diff) < 1.3) {
-                            m.hp -= damage; 
-                            if (m.freezeTimer <= 0) { m.x += Math.cos(angle) * 15; m.y += Math.sin(angle) * 15; }
-                            if (m.hp <= 0) player.xp += m.xpValue;
-                        }
-                    }
-                });
-            }
-
-            player.isRolling = true;
-            player.rollTimer = 20; 
-            player.backdashMode = true; 
-        }
-
+        // --- LÓGICA DE HABILIDADES ---
         function triggerMagoExplosive() {
+            if (player.hasTorchActive) return; // MODIFICAÇÃO: Impede uso com tocha na mão
             player.cooldowns[1] = 480; 
             let angle = Math.atan2(mouseY - canvas.height/2, mouseX - canvas.width/2);
             projectiles.push({
@@ -584,6 +136,7 @@
         }
 
         function triggerMagoGelo() {
+            if (player.hasTorchActive) return; // MODIFICAÇÃO: Impede uso com tocha na mão
             player.cooldowns[2] = 300; 
             let baseAngle = Math.atan2(mouseY - canvas.height/2, mouseX - canvas.width/2);
             let iceCastId = Math.random().toString(); 
@@ -602,6 +155,7 @@
         }
 
         function triggerLadinoSombras() {
+            if (player.hasTorchActive) return; // MODIFICAÇÃO: Impede uso com tocha na mão
             player.cooldowns[1] = 240; 
             player.isInvisible = true;
             player.invisibleTimer = 360; 
@@ -609,6 +163,7 @@
         }
 
         function triggerLadinoBleedStrike() {
+            if (player.hasTorchActive) return; // MODIFICAÇÃO: Impede uso com tocha na mão
             if (player.cooldowns[3] > 0) return;
             player.cooldowns[3] = 360; 
             
@@ -641,6 +196,7 @@
         }
 
         function fireRangedArrow() {
+            if (player.hasTorchActive) return; // MODIFICAÇÃO: Impede uso com tocha na mão
             player.cooldowns[1] = 140; 
             let angle = Math.atan2(mouseY - canvas.height/2, mouseX - canvas.width/2);
             let pct = Math.min(chargeTimer / 300, 1.0); 
@@ -657,6 +213,7 @@
 
         function triggerSkill(skill) {
             if (!gameRunning || player.cooldowns[skill] > 0 || isDead) return;
+            if (player.hasTorchActive) return; // MODIFICAÇÃO: Impede ativação de esquiva/dash com a tocha ativa
             if (skill === 'Space') { player.cooldowns[skill] = 90; player.isRolling = true; player.rollTimer = 18; player.backdashMode = false; }
         }
 
@@ -697,6 +254,7 @@
             }
         }
 
+        // --- GAME LOOP UPDATE ---
         function update() {
             if(!gameRunning || isDead) return;
             if(player.hp <= 0) { handlePlayerDeath(); return; }
@@ -725,7 +283,8 @@
             player.angle = Math.atan2(mouseY - canvas.height/2, mouseX - canvas.width/2);
             if (player.attackCooldown > 0) player.attackCooldown--;
 
-            if(isQPressed && player.class === 'Ranged' && player.weaponMode === 'arco' && player.cooldowns[1] <= 0) {
+            // MODIFICAÇÃO: Só carrega ataque se não estiver segurando a tocha
+            if(isQPressed && player.class === 'Ranged' && player.weaponMode === 'arco' && player.cooldowns[1] <= 0 && !player.hasTorchActive) {
                 if(chargeTimer < 300) chargeTimer++; 
                 document.getElementById('charge-bar-container').style.display = 'block';
                 document.getElementById('charge-bar-fill').style.width = `${(chargeTimer / 300) * 100}%`;
@@ -826,7 +385,6 @@
             }
 
             if(isHost) {
-                // LÓGICA DE SPAWN ADAPTATIVA
                 let isNight = gameTime >= DAY_DURATION;
 
                 monsters.forEach(m => {
@@ -842,7 +400,11 @@
                     if (m.freezeTimer > 0) m.freezeTimer--;
 
                     let targets = [player, ...Object.values(remotePlayers)].filter(t => t && t.class && !t.isInvisible && t.hp > 0);
-                    if(targets.length === 0) return;
+                    if(targets.length === 0) {
+                        m.animTimer++; if(m.animTimer > 12) { m.animFrame = (m.animFrame + 1) % 4; m.animTimer = 0; }
+                        return; 
+                    }
+                    
                     let closest = targets[0];
                     let minDist = Math.hypot(closest.x - m.x, closest.y - m.y);
                     m.angle = Math.atan2(closest.y - m.y, closest.x - m.x);
@@ -862,17 +424,14 @@
                 
                 monsters = monsters.filter(m => m.hp > 0);
                 
-                // Spawnar novos monstros se houver espaço
                 if(monsters.length < MAX_MONSTERS && Math.random() < 0.005) {
                     if (isNight) {
-                        // À noite, 50% de chance de nascer um Olho, 50% Golem
                         if (Math.random() < 0.5) {
                             monsters.push(createOlhoMonster());
                         } else {
                             monsters.push(createGolemMonster());
                         }
                     } else {
-                        // De dia, apenas Golems nascem
                         monsters.push(createGolemMonster());
                     }
                 }
@@ -895,6 +454,7 @@
             document.getElementById('xp-text').innerText = `${player.xp} / ${player.nextLevelXp}`;
         }
 
+        // --- RENDER GAME CANVAS ---
         function render() {
             if(!gameRunning) return;
             ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -930,14 +490,15 @@
 
             projectiles.forEach(p => {
                 ctx.save(); ctx.translate(p.x + camX, p.y + camY); ctx.rotate(Math.atan2(p.vy, p.vx));
+                
                 if(p.isFireball) {
-                    let gradient = ctx.createRadialGradient(0, 0, 2, 0, 0, p.size);
-                    if(p.isBlue) {
-                        gradient.addColorStop(0, '#eaffff'); gradient.addColorStop(0.5, '#006c9c'); gradient.addColorStop(1, 'rgba(0, 10, 80, 0)');
+                    if (SPRITES.bolaDeFogo.complete) {
+                        ctx.drawImage(SPRITES.bolaDeFogo, -p.size, -p.size, p.size * 2, p.size * 2);
                     } else {
+                        let gradient = ctx.createRadialGradient(0, 0, 2, 0, 0, p.size);
                         gradient.addColorStop(0, '#ffdfbf'); gradient.addColorStop(0.4, '#8a1c00'); gradient.addColorStop(1, 'rgba(30, 0, 0, 0)');
+                        ctx.fillStyle = gradient; ctx.beginPath(); ctx.arc(0, 0, p.size, 0, Math.PI*2); ctx.fill();
                     }
-                    ctx.fillStyle = gradient; ctx.beginPath(); ctx.arc(0, 0, p.size, 0, Math.PI*2); ctx.fill();
                 } else if(p.isArrow) {
                     ctx.strokeStyle = p.isSuperArrow ? '#145c28' : '#6b5a40'; 
                     ctx.lineWidth = p.size / 2; ctx.beginPath(); ctx.moveTo(-15, 0); ctx.lineTo(15, 0); ctx.stroke();
@@ -956,11 +517,9 @@
                 ctx.restore();
             });
 
-            // RENDERIZAÇÃO ATUALIZADA DOS MONSTROS
             monsters.forEach(m => {
                 ctx.save(); ctx.translate(m.x + camX, m.y + camY); ctx.rotate(m.angle + Math.PI/2);
                 
-                // Filtros de estado comuns (sangrando/congelado)
                 if (m.bleedTimer > 0 && Math.floor(m.bleedTimer / 4) % 2 === 0) {
                     ctx.filter = 'contrast(1.5) brightness(0.3) sepia(1) hue-rotate(-50deg)';
                 } else if (m.freezeTimer > 0) {
@@ -970,21 +529,18 @@
                 }
 
                 if (m.type === 'golem') {
-                    // Render antigo do Golem (com animação)
                     let frameImg = SPRITES.golemWalk[m.animFrame];
                     if (frameImg.complete) {
                         ctx.drawImage(frameImg, -m.size, -m.size, m.size*2, m.size*2);
                     }
                 } else if (m.type === 'olho') {
-                    // Render novo do Olho (estático, rotacionado para o player)
                     if (SPRITES.monstroOlho.complete) {
-                        // Ajuste de rotação específico para o sprite do olho ficar de frente
-                        ctx.rotate(-Math.PI/2); // Cancela a rotação padrão de andar
+                        ctx.rotate(-Math.PI/2); 
                         ctx.drawImage(SPRITES.monstroOlho, -m.size, -m.size, m.size*2, m.size*2);
                     }
                 }
                 
-                ctx.filter = 'none'; // Reseta filtros
+                ctx.filter = 'none'; 
                 ctx.restore();
                 
                 if (m.freezeTimer > 0) {
@@ -1043,6 +599,7 @@
             if (isNight) {
                 ctx.save();
                 
+                // MODIFICAÇÃO: Se a tocha estiver ativa, expande o tamanho do raio da visão padrão de forma limpa (sem filtros de cor)
                 let lightRadius = player.isInvisible ? 95 : 175;
                 if (player.hasTorchActive && !player.isInvisible) {
                     lightRadius = 340; 
@@ -1050,16 +607,10 @@
 
                 let gradient = ctx.createRadialGradient(canvas.width/2, canvas.height/2, lightRadius * 0.1, canvas.width/2, canvas.height/2, lightRadius);
                 
-                if (player.hasTorchActive && !player.isInvisible) {
-                    gradient.addColorStop(0, 'rgba(255, 140, 40, 0)');
-                    gradient.addColorStop(0.3, 'rgba(230, 95, 20, 0.25)');
-                    gradient.addColorStop(0.7, 'rgba(120, 40, 5, 0.7)');
-                    gradient.addColorStop(1, 'rgba(1, 1, 3, 0.99)');
-                } else {
-                    gradient.addColorStop(0, 'rgba(0, 0, 0, 0)');
-                    gradient.addColorStop(0.5, 'rgba(0, 0, 2, 0.65)');
-                    gradient.addColorStop(1, 'rgba(0, 0, 1, 0.99)'); 
-                }
+                // Ambas as opções agora utilizam sombras pretas puras de forma idêntica, alterando apenas a distância alcançada
+                gradient.addColorStop(0, 'rgba(0, 0, 0, 0)');
+                gradient.addColorStop(0.5, 'rgba(0, 0, 2, 0.65)');
+                gradient.addColorStop(1, 'rgba(0, 0, 1, 0.99)'); 
                 
                 ctx.fillStyle = gradient; 
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -1071,6 +622,27 @@
             update(); render();
             window.requestAnimationFrame(gameLoop);
         }
+
+        // --- GESTÃO DE INPUTS BÁSICOS ---
+        window.addEventListener('keydown', e => { 
+            keys[e.key.toLowerCase()] = true; 
+            if(e.key === ' ') triggerSkill('Space'); 
+            if(e.key.toLowerCase() === 'q') isQPressed = true; 
+        });
+        
+        window.addEventListener('keyup', e => { 
+            keys[e.key.toLowerCase()] = false; 
+            if(e.key.toLowerCase() === 'q') { 
+                if (player.hasTorchActive) { isQPressed = false; return; } // MODIFICAÇÃO: Impede disparar habilidades ao soltar o Q se estiver de tocha
+                if(player.class === 'Mago') triggerMagoExplosive(); 
+                else if(player.class === 'Ranged') fireRangedArrow(); 
+            } 
+        });
+        
+        window.addEventListener('mousemove', e => { mouseX = e.clientX; mouseY = e.clientY; });
+        window.addEventListener('resize', () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight; });
+
+        gameLoop();
     </script>
 </body>
 </html>
