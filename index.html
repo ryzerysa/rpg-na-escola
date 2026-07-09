@@ -338,6 +338,11 @@ Conversa com o Gemini
         .guild-list-item { display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid #211a12; }
         .guild-name-green { color: #59ff85; }
         .guild-name-red { color: #ff5d5d; }
+        #guild-notification { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 60; width: min(420px, 92vw); }
+        .guild-toast { background: rgba(8, 7, 6, 0.95); border: 1px solid #8c7038; padding: 12px 14px; box-shadow: 0 0 18px rgba(0,0,0,0.45); color: #e9dec8; }
+        .guild-toast-message { margin-bottom: 8px; font-size: 0.95rem; }
+        .guild-toast-actions { display:flex; gap: 8px; flex-wrap: wrap; }
+        .guild-toast-actions button { margin: 0; padding: 8px 10px; }
         .hidden { display: none !important; }
 
     </style>
@@ -479,7 +484,7 @@ Conversa com o Gemini
         </div>
     </div>
 
-
+    <div id="guild-notification" class="hidden"></div>
 
     <div id="death-screen">
 
@@ -595,6 +600,7 @@ Conversa com o Gemini
         let selectedCharacter = null;
         let selectedClassForCreation = 'Mago';
         let guildMembers = [];
+        let guildInvitePending = null;
         let inGameMenuOpen = false;
         let parryWindow = 0;
 
@@ -843,6 +849,104 @@ Conversa com o Gemini
             document.getElementById('guild-panel').classList.add('hidden');
         }
 
+        function syncLocalGuildMember() {
+            const currentName = selectedCharacter ? selectedCharacter.name : 'Você';
+            guildMembers = guildMembers.filter(member => member.id !== player.id);
+            guildMembers.unshift({ id: player.id, name: currentName });
+        }
+
+        function showGuildNotification(message, buttons = []) {
+            const container = document.getElementById('guild-notification');
+            if (!container) return;
+            container.innerHTML = '';
+            const toast = document.createElement('div');
+            toast.className = 'guild-toast';
+            const msg = document.createElement('div');
+            msg.className = 'guild-toast-message';
+            msg.innerText = message;
+            toast.appendChild(msg);
+            if (buttons.length) {
+                const actions = document.createElement('div');
+                actions.className = 'guild-toast-actions';
+                buttons.forEach(button => {
+                    const btn = document.createElement('button');
+                    btn.className = 'panel-btn';
+                    btn.innerText = button.label;
+                    btn.onclick = button.onClick;
+                    actions.appendChild(btn);
+                });
+                toast.appendChild(actions);
+            }
+            container.appendChild(toast);
+            container.classList.remove('hidden');
+        }
+
+        function clearGuildNotification() {
+            const container = document.getElementById('guild-notification');
+            if (container) {
+                container.innerHTML = '';
+                container.classList.add('hidden');
+            }
+        }
+
+        function broadcastGuildMembers() {
+            syncLocalGuildMember();
+            if (conn && conn.open) {
+                conn.send({ type: 'guildSync', members: guildMembers });
+            }
+        }
+
+        function isPlayerInGuild(targetId, targetName) {
+            return guildMembers.some(member => member.id === targetId || member.name === targetName);
+        }
+
+        function addGuildMember(member) {
+            if (!member || !member.id) return;
+            const exists = guildMembers.some(existing => existing.id === member.id || existing.name === member.name);
+            if (!exists) {
+                guildMembers.push(member);
+            }
+        }
+
+        function inviteToGuild(targetName, targetId) {
+            if (!conn || !conn.open) {
+                showGuildNotification('Conecte-se a outro jogador para convidar.', []);
+                return;
+            }
+            if (!targetId) {
+                showGuildNotification('Este jogador ainda não está disponível para convite.', []);
+                return;
+            }
+            conn.send({
+                type: 'guildInvite',
+                fromId: player.id,
+                fromName: selectedCharacter ? selectedCharacter.name : 'Jogador',
+                targetId,
+                targetName
+            });
+            showGuildNotification(`Convite enviado para ${targetName}.`, []);
+            renderGuildList();
+        }
+
+        function respondToGuildInvite(accepted, inviterId, inviterName) {
+            clearGuildNotification();
+            if (!conn || !conn.open) return;
+            conn.send({
+                type: 'guildInviteResponse',
+                fromId: player.id,
+                fromName: selectedCharacter ? selectedCharacter.name : 'Jogador',
+                targetId: inviterId,
+                accepted
+            });
+            if (accepted) {
+                addGuildMember({ id: inviterId, name: inviterName });
+                broadcastGuildMembers();
+                showGuildNotification(`Você entrou na guilda de ${inviterName}.`, []);
+            } else {
+                showGuildNotification(`Você recusou o convite de ${inviterName}.`, []);
+            }
+        }
+
         function saveCharacterState() {
             if (!selectedCharacter) return;
             const payload = {
@@ -960,11 +1064,16 @@ Conversa com o Gemini
         }
 
         function renderGuildList() {
+            syncLocalGuildMember();
             const list = document.getElementById('guild-list');
             list.innerHTML = '';
             const connectedPlayers = [
-                { name: selectedCharacter ? selectedCharacter.name : 'Você', inGuild: true },
-                ...Object.values(remotePlayers).filter(Boolean).map(remote => ({ name: remote.name || (remote.class || 'Jogador'), inGuild: true }))
+                { id: player.id, name: selectedCharacter ? selectedCharacter.name : 'Você', inGuild: true },
+                ...Object.values(remotePlayers).filter(Boolean).map(remote => ({
+                    id: remote.id || remote.name || 'remote',
+                    name: remote.name || (remote.class || 'Jogador'),
+                    inGuild: isPlayerInGuild(remote.id || remote.name, remote.name || (remote.class || 'Jogador'))
+                }))
             ];
             connectedPlayers.forEach(playerItem => {
                 const row = document.createElement('div');
@@ -974,11 +1083,10 @@ Conversa com o Gemini
                 label.innerText = playerItem.name;
                 const button = document.createElement('button');
                 button.className = 'panel-btn';
-                button.innerText = playerItem.inGuild ? 'Membro' : 'Convidar';
+                button.innerText = playerItem.id === player.id ? 'Membro' : (playerItem.inGuild ? 'Membro' : 'Convidar');
                 button.onclick = () => {
-                    if (!playerItem.inGuild) {
-                        playerItem.inGuild = true;
-                        renderGuildList();
+                    if (playerItem.id !== player.id && !playerItem.inGuild) {
+                        inviteToGuild(playerItem.name, playerItem.id);
                     }
                 };
                 row.appendChild(label);
@@ -987,7 +1095,7 @@ Conversa com o Gemini
             });
             const hint = document.createElement('p');
             hint.className = 'menu-subtitle';
-            hint.innerText = 'Só aparecem os jogadores conectados ao servidor.';
+            hint.innerText = 'Convide jogadores conectados para a guilda.';
             list.appendChild(hint);
         }
 
@@ -1008,7 +1116,8 @@ Conversa com o Gemini
             isHost = true; 
 
             setupChat(); 
-
+            syncLocalGuildMember();
+            broadcastGuildMembers();
             document.getElementById('mp-status-msg').innerText = "CONEXÃO ESTABELECIDA! Almas vinculadas.";
 
             document.getElementById('mp-status-msg').style.color = "#5cb85c";
@@ -1033,12 +1142,11 @@ Conversa com o Gemini
 
                 isHost = false; 
 
-                
-
                 conn.on('open', () => {
 
                     setupChat(); 
-
+                    syncLocalGuildMember();
+                    broadcastGuildMembers();
                     document.getElementById('mp-status-msg').innerText = "CONEXÃO ESTABELECIDA! Almas vinculadas.";
 
                     document.getElementById('mp-status-msg').style.color = "#5cb85c";
@@ -1057,12 +1165,33 @@ Conversa com o Gemini
 
                 if(!data || typeof data !== 'object') return;
 
-                
-
                 if(data.type === 'playerUpdate' && data.id) {
+                    remotePlayers[data.id] = { ...data.state, id: data.id, guildMember: !!data.state.guildMember };
+                    renderGuildList();
+                }
 
-                    remotePlayers[data.id] = data.state;
+                if(data.type === 'guildInvite' && data.targetId === player.id) {
+                    guildInvitePending = { fromId: data.fromId, fromName: data.fromName };
+                    showGuildNotification(`${data.fromName} te convidou para a guilda.`, [
+                        { label: 'Aceitar', onClick: () => respondToGuildInvite(true, data.fromId, data.fromName) },
+                        { label: 'Recusar', onClick: () => respondToGuildInvite(false, data.fromId, data.fromName) }
+                    ]);
+                }
 
+                if(data.type === 'guildInviteResponse' && data.targetId === player.id) {
+                    if (data.accepted) {
+                        addGuildMember({ id: data.fromId, name: data.fromName });
+                        broadcastGuildMembers();
+                        showGuildNotification(`${data.fromName} aceitou o convite.`, []);
+                    } else {
+                        showGuildNotification(`${data.fromName} recusou o convite.`, []);
+                    }
+                }
+
+                if(data.type === 'guildSync') {
+                    guildMembers = Array.isArray(data.members) ? data.members : guildMembers;
+                    syncLocalGuildMember();
+                    renderGuildList();
                 }
 
                 if(data.type === 'projectiles') projectiles = data.list || []; 
@@ -1071,15 +1200,11 @@ Conversa com o Gemini
 
                 if(data.type === 'explosion') triggerVisualExplosion(data); 
 
-                
-
                 if(data.type === 'timeSync' && !isHost) {
 
                     gameTime = data.time;
 
                 }
-
-                
 
                 if(data.type === 'inflictDamage' && data.targetId === player.id) {
 
@@ -1163,6 +1288,7 @@ Conversa com o Gemini
 
         const SPRITES = {
 
+            grama: createSpriteImage(`${SPRITE_BASE_PATH}/grama.png`, 'sprites/grama.png', FALLBACK_SPRITE),
             ladino: createSpriteImage(`${SPRITE_BASE_PATH}/ladino.png`, 'sprites/ladino.png', FALLBACK_SPRITE),
             mago: createSpriteImage(`${SPRITE_BASE_PATH}/mago.png`, 'sprites/mago.png', FALLBACK_SPRITE),
             ranged: createSpriteImage(`${SPRITE_BASE_PATH}/ranged.png`, 'sprites/ranged.png', FALLBACK_SPRITE),
@@ -2460,7 +2586,7 @@ Conversa com o Gemini
 
             if(conn && conn.open) {
 
-                conn.send({ type: 'playerUpdate', id: player.id, state: { x: player.x, y: player.y, angle: player.angle, class: player.class, hp: player.hp, isInvisible: player.isInvisible, hasTorchActive: player.hasTorchActive, parryWindow: player.parryWindow, name: selectedCharacter ? selectedCharacter.name : 'Jogador' } });
+                conn.send({ type: 'playerUpdate', id: player.id, state: { x: player.x, y: player.y, angle: player.angle, class: player.class, hp: player.hp, isInvisible: player.isInvisible, hasTorchActive: player.hasTorchActive, parryWindow: player.parryWindow, guildMember: isPlayerInGuild(player.id, selectedCharacter ? selectedCharacter.name : 'Jogador'), name: selectedCharacter ? selectedCharacter.name : 'Jogador' } });
 
             }
 
@@ -2767,6 +2893,11 @@ Conversa com o Gemini
 
                 }
 
+                const localGuildColor = isPlayerInGuild(player.id, selectedCharacter ? selectedCharacter.name : 'Você') ? '#59ff85' : '#ff5d5d';
+                ctx.font = '12px serif';
+                ctx.textAlign = 'center';
+                ctx.fillStyle = localGuildColor;
+                ctx.fillText(selectedCharacter ? selectedCharacter.name : 'Jogador', canvas.width/2, canvas.height/2 - player.size - 12);
 
 
                 if(player.bleedTimer > 0 && Math.floor(player.bleedTimer / 6) % 2 === 0) {
@@ -2785,9 +2916,7 @@ Conversa com o Gemini
 
                 ctx.save();
 
-                
-
-                let lightRadius = player.isInvisible ? 95 : 180;
+                let lightRadius = player.isInvisible ? 95 : 130;
 
                 if (player.hasTorchActive && !player.isInvisible) {
 
@@ -2795,39 +2924,44 @@ Conversa com o Gemini
 
                 }
 
-
-
                 let gradient = ctx.createRadialGradient(canvas.width/2, canvas.height/2, lightRadius * 0.1, canvas.width/2, canvas.height/2, lightRadius);
-
-                
 
                 if (player.hasTorchActive && !player.isInvisible) {
 
-                    gradient.addColorStop(0, 'rgba(240, 240, 230, 0.05)');
-
-                    gradient.addColorStop(0.25, 'rgba(180, 180, 170, 0.18)');
-
-                    gradient.addColorStop(0.6, 'rgba(90, 90, 90, 0.68)');
-
-                    gradient.addColorStop(1, 'rgba(5, 5, 6, 0.98)');
+                    gradient.addColorStop(0, 'rgba(255, 242, 200, 0.05)');
+                    gradient.addColorStop(0.16, 'rgba(210, 185, 130, 0.16)');
+                    gradient.addColorStop(0.45, 'rgba(110, 95, 70, 0.55)');
+                    gradient.addColorStop(1, 'rgba(4, 4, 5, 0.98)');
 
                 } else {
 
                     gradient.addColorStop(0, 'rgba(0, 0, 0, 0)');
-
-                    gradient.addColorStop(0.5, 'rgba(0, 0, 2, 0.65)');
-
+                    gradient.addColorStop(0.45, 'rgba(0, 0, 2, 0.72)');
                     gradient.addColorStop(1, 'rgba(0, 0, 1, 0.99)'); 
 
                 }
 
-                
-
                 ctx.fillStyle = gradient; 
-
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
-
                 ctx.restore();
+
+                Object.values(remotePlayers).forEach(np => {
+                    if (!np || !np.hasTorchActive || np.isInvisible || np.hp <= 0) return;
+                    const worldX = np.x + camX;
+                    const worldY = np.y + camY;
+                    const remoteRadius = 180;
+                    const remoteGradient = ctx.createRadialGradient(worldX, worldY, 10, worldX, worldY, remoteRadius);
+                    remoteGradient.addColorStop(0, 'rgba(255, 242, 200, 0.06)');
+                    remoteGradient.addColorStop(0.2, 'rgba(210, 185, 130, 0.14)');
+                    remoteGradient.addColorStop(0.6, 'rgba(70, 55, 35, 0.5)');
+                    remoteGradient.addColorStop(1, 'rgba(5, 5, 6, 0)');
+                    ctx.save();
+                    ctx.fillStyle = remoteGradient;
+                    ctx.beginPath();
+                    ctx.arc(worldX, worldY, remoteRadius, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.restore();
+                });
 
             }
 
